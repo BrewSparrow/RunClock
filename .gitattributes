@@ -1,2 +1,8 @@
-# Auto detect text files and perform LF normalization
 * text=auto
+*.elf -text
+*.ovl -text
+*.png -text
+*.zip -text
+*.tar.gz -text
+*.tar.xz -text
+*.a -text

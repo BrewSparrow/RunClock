@@ -1,0 +1,13 @@
+{
+  "id": "runclock",
+  "name": "RunClock",
+  "version": "1.0.0-beta.1",
+  "author": "BrewSparrow",
+  "api": 1,
+  "kind": "elf",
+  "elf": "runclock.ovl",
+  "order": 35,
+  "keepAlive": true,
+  "autostart": false,
+  "description": "RunClock standalone private timing worker."
+}

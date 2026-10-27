@@ -1,0 +1,56 @@
+{
+  "project": "RunClock",
+  "version": "1.0.0-beta.1",
+  "author": "BrewSparrow",
+  "physical_console_tested": true,
+  "result": "core_functionality_reported_working_with_known_limitations",
+  "change_scope": "Release documentation, archive integrity, and release-asset verifier; executable unchanged from the tested beta.",
+  "tested_baseline": {
+    "project": "RunClock",
+    "version": "1.0",
+    "reported_on": "2026-10-27",
+    "physical_console_tested": true,
+    "result": "passed_as_reported_by_maintainer",
+    "source": "Maintainer report in project conversation",
+    "test_scope": "Standalone functional test after console restart",
+    "firmware": "13.60",
+    "loader": "Payload Manager",
+    "elf_bytes": 10502240,
+    "elf_sha256": "630697e32ff08f4f3967c38a65dd566a7fa1b79571e20d60cd03dffaea84ea05"
+  },
+  "reported_on": "2026-10-27",
+  "source": "Maintainer report in project conversation",
+  "test_scope": "Maintainer-reported timer/storage functionality and in-game opening after clean restart; built-in recording omits overlay. Full capture support unverified.",
+  "firmware": "13.60",
+  "loader": "Payload Manager",
+  "elf_bytes": 10502240,
+  "elf_sha256": "8c1403242f9c2ecb0eafe873fbee77c063358a8cc5636a40622d1651c2b5bcc1",
+  "in_game_opening": "Maintainer confirms working after restarting the PS5; no code change claimed.",
+  "known_issues": [
+    {
+      "id": "capture-overlay",
+      "status": "reported",
+      "description": "RunClock absent from PS5 built-in gameplay recordings."
+    },
+    {
+      "id": "capture-controls",
+      "status": "reported_before_restart_not_retested_after",
+      "description": "Capture controls reported unresponsive with panel open; current input filters suppress buttons."
+    },
+    {
+      "id": "triangle-in-game",
+      "status": "source_inspection",
+      "description": "Raw game-input route does not map Triangle; use Delete attempt / Confirm delete menu controls."
+    }
+  ],
+  "executable_changed_during_finalization": false,
+  "executable_rebuilt_during_finalization": false,
+  "automated_scope_excludes": [
+    "full raw in-game controller relay",
+    "ShellUI composition",
+    "screenshot and video capture",
+    "hardware timing latency"
+  ],
+  "host_regression_checks_last_run": "2026-10-27",
+  "host_regression_checks": "passed"
+}

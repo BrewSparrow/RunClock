@@ -1,0 +1,19 @@
+{
+  "name": "RunClock",
+  "version": "1.0.0-beta.1",
+  "tag": "v1.0.0-beta.1",
+  "kind": "standalone-elf",
+  "requires_prosperomenu": false,
+  "target_firmware": "13.60",
+  "physical_console_tested": true,
+  "verification_source": "Maintainer-reported timer/storage test and in-game opening after restart; public beta with capture and input limitations. See CONSOLE_TEST.md and KNOWN_ISSUES.md.",
+  "prerelease": true,
+  "default_splits": 10,
+  "live_clocks": true,
+  "native_kernel_support": "compatible kstuff injection readiness",
+  "author": "BrewSparrow",
+  "display_title": "RunClock v1.0.0-beta.1",
+  "release_stage": "public-beta",
+  "built_in_recording_includes_overlay": false,
+  "capture_work_deferred": true
+}

@@ -1,0 +1,25 @@
+const assert = require('node:assert/strict');
+const { Timer, format, key } = require('../preview/timer.js');
+const t = new Timer(3);
+assert.equal(t.split(90), false); assert.equal(t.pause(90), false);
+assert(t.start(1000)); assert.equal(t.start(1001), false);
+assert.equal(t.elapsed(61000), 60000); assert(t.split(61000));
+assert(t.pause(62000)); assert.equal(t.elapsed(90000), 61000);
+assert.equal(t.realtime(90000), 89000); assert.equal(t.split(90000), false);
+assert(t.resume(92000)); assert(t.split(94000)); assert(t.undo());
+assert.equal(t.next, 1); assert(t.split(95000)); assert(t.split(96000));
+assert.equal(t.phase, 'running'); assert.equal(t.split(96001), false); assert(t.finish(96000));
+assert.equal(t.phase, 'complete'); assert.equal(t.elapsed(999999), 65000);
+assert.equal(t.realtime(999999), 95000); assert.equal(t.undo(), false);
+assert.equal(format(3723456), '01:02:03.45'); assert.equal(format(null), '—');
+assert.notEqual(key({title:'G', category:'A', names:['X']}), key({title:'G', category:'B', names:['X']}));
+console.log('Desktop timer: shared timing scenarios passed.');
+
+const ten=new Timer(10);assert(ten.start(100));
+for(let i=0;i<10;i++)assert(ten.split(200+i*100));
+assert.equal(ten.phase,'running');assert.equal(ten.split(1200),false);assert(ten.finish(1500));
+assert.equal(ten.elapsed(9999),1400);assert.equal(ten.splits[9],1000);
+const partial=new Timer(10);assert(partial.start(100));assert(partial.split(125));assert(partial.pause(150));assert(partial.finish(200));
+assert.equal(partial.elapsed(9999),50);assert.equal(partial.realtime(9999),100);assert.equal(partial.next,1);assert.equal(partial.splits[1],null);
+partial.reset();assert.equal(partial.elapsed(9999),0);assert.equal(partial.realtime(9999),0);
+console.log('Ten splits, independent Finish, partial/paused finish and both-clock reset passed.');

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RunClock v1.0.0-beta.1 · BrewSparrow</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="shell">
+  <header class="topbar"><a class="brand" href="index.html" aria-label="RunClock home"><span class="brand-mark">R<span>↗</span></span><span class="brand-copy">RunClock<span class="version">v1.0.0-beta.1</span><small style="display:block;font-size:12px;letter-spacing:0;line-height:1.4">BrewSparrow</small></span></a><div class="top-status"><span class="dot"></span> OFFLINE <span class="sep">/</span> DESKTOP PROTOTYPE</div><button class="quiet" id="contrast" aria-label="Toggle higher contrast">◐ <span>Contrast</span></button></header>
+  <div class="build-note">Development preview · PS5 target: 13.60 · Native build uses a menu layout; on-console validation is pending.</div>
+  <main>
+    <div class="page-title"><div><div class="eyebrow">YOUR NEXT PERSONAL BEST STARTS HERE</div><h1>Make every run count.</h1></div><button class="outline" id="edit-route">Edit route <span>↗</span></button></div>
+    <div class="workspace">
+      <section class="timer-panel" aria-label="Timer">
+        <div class="route-top"><div><div class="eyebrow">CURRENT ROUTE</div><h2 id="game-title"></h2><p id="category"></p></div><span class="phase" id="phase">READY</span></div>
+        <div class="timer-area"><div class="small-label">ACTIVE TIME <span>MANUAL PAUSES EXCLUDED</span></div><div class="clock" id="clock" aria-label="Active elapsed time">00:00:00<span>.00</span></div><div class="real-time">REAL ELAPSED <strong id="rta">00:00:00.00</strong></div><div class="next-line"><span class="arrow">↗</span><span id="next-name"></span></div></div>
+        <div class="progress" aria-label="Route progress"><div id="progress-fill"></div></div>
+        <div class="controls"><button class="primary" id="primary"><span class="key">↵</span><span id="primary-label">Start run</span><span class="right-icon">→</span></button><button class="secondary" id="pause" disabled><span class="key">P</span><span id="pause-label">Pause</span></button><button class="icon-button" id="undo" title="Undo last split (U)" aria-label="Undo last split" disabled>↶</button><button class="icon-button" id="reset" title="Reset clocks (R)" aria-label="Reset clocks">↻</button></div>
+        <button class="outline finish-control" id="finish" disabled>Finish run</button>
+        <div class="controller-hint" id="controller-hint">Keyboard: Enter start/split · P pause · U undo · R reset</div>
+      </section>
+      <section class="splits-panel" aria-label="Splits"><div class="panel-heading"><h2>Route splits <span id="split-count"></span></h2><span class="mini-tag">MANUAL</span></div><div class="split-head"><span>CHECKPOINT</span><span>THIS RUN / PB</span></div><ol id="splits"></ol><div class="split-footer"><span class="tiny-dot"></span> Times and records stay on this device.</div></section>
+    </div>
+    <div class="stats"><section class="stat"><div class="stat-icon">⚑</div><div><div class="small-label">PERSONAL BEST · ACTIVE</div><strong id="pb">No completed runs yet</strong></div></section><section class="stat"><div class="stat-icon">↻</div><div><div class="small-label">ATTEMPTS STARTED</div><strong id="attempts">0</strong></div></section><section class="stat"><div class="stat-icon">✓</div><div><div class="small-label">RUNS COMPLETED</div><strong id="completed">0</strong></div></section></div>
+    <div class="bottom-bar"><div><span class="dot"></span><span id="save-status">Local saving enabled</span></div><div class="bottom-actions"><button class="text-button" id="history-open">Run history ↗</button><button class="text-button" id="export">Export backup ↓</button><button class="text-button" id="import">Import backup ↑</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></div>
+  </main>
+  <footer><span>RUNCLOCK <span class="muted">/</span> PLAY. PRACTICE. IMPROVE.</span><span>No account. No cloud. Just your next run.</span></footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="route-dialog"><form id="route-form"><div class="dialog-top"><div><div class="eyebrow">BUILD YOUR ROUTE</div><h2>A plan for every checkpoint.</h2></div><button type="button" class="icon-button" data-close="route-dialog" aria-label="Close route editor">×</button></div><label>Game title<input id="route-title" maxlength="80" required></label><label>Category<input id="route-category" maxlength="80" required></label><label>Checkpoints <span class="muted">one per line · up to 32</span><textarea id="route-names" rows="7" required></textarea></label><p class="form-note">Changing a route starts a separate set of records. Existing records are kept.</p><p class="error" id="route-error" role="alert"></p><button class="primary" type="submit">Save route <span>→</span></button></form></dialog>
+<dialog id="history-dialog"><div class="dialog-top"><div><div class="eyebrow">THE WORK ADDS UP</div><h2>Run history</h2></div><button class="icon-button" data-close="history-dialog" aria-label="Close history">×</button></div><p class="form-note">Current route · newest first · active and real elapsed times</p><div id="history-list"></div></dialog>
+<dialog id="reset-dialog"><h2>Reset both clocks?</h2><p class="form-note">This attempt will be recorded as abandoned. Your completed runs and personal best stay saved.</p><div class="dialog-actions"><button class="outline" data-close="reset-dialog">Keep running</button><button class="primary" id="reset-confirm">Reset clocks</button></div></dialog>
+<dialog id="import-dialog"><h2>Replace desktop records?</h2><p class="form-note">The selected backup replaces this preview’s current route and records. Export a backup first if you want to keep them.</p><div class="dialog-actions"><button class="outline" data-close="import-dialog">Cancel</button><button class="primary" id="import-confirm">Import backup</button></div></dialog>
+<script src="timer.js"></script><script src="app.js"></script>
+</body></html>

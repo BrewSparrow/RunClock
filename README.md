@@ -44,7 +44,6 @@ If the panel opens on the home screen but fails to open in a game, restart the c
 | Undo last split | Remove the latest unfinished checkpoint |
 | Reset clocks → Confirm reset clocks | Clear both clocks; save an unfinished attempt as reset |
 | Records → attempt → Delete attempt → Confirm delete | Delete that saved result and recalculate the personal best |
-| Triangle, then a second Triangle press in saved-attempt details | Open/confirm deletion from the home-screen panel; use the menu controls during a game |
 | Circle | Go back, cancel a confirmation, or close the main panel |
 
 Finish can save a run with zero, some, or all splits recorded. Unused splits stay `--`. Holding a button cannot confirm deletion. Resetting the clocks keeps completed records.

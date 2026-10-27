@@ -2,8 +2,12 @@
 name: Bug report
 about: Report a standalone RunClock problem
 title: "[Bug] "
+labels: ''
+assignees: ''
+
 ---
-Please check KNOWN_ISSUES.md first. Built-in capture and the in-game Triangle shortcut have documented limitations in beta.1.
+
+Please check KNOWN_ISSUES.md first. Built-in capture have documented limitations in beta.1.
 
 Firmware:
 RunClock ELF SHA-256:

@@ -66,4 +66,4 @@ See [Known issues](KNOWN_ISSUES.md), [console test history](CONSOLE_TEST.md), an
 
 RunClock is **GPL-3.0-or-later**. Its rendering/input foundation is adapted from [StonedModder/Prospero-Menu](https://github.com/StonedModder/Prospero-Menu), revision `84dd26cd342a5d9b1df5a93942ca5d7f10c8d39e`. Original copyright and license notices are retained. RunClock runs independently of that application.
 
-Both **RunClock_Standalone_Source_v1.0.0-beta.1.zip** and **RunClock_Dependency_Source_v1.0.0-beta.1.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and the [GitHub release guide](GITHUB_RELEASE_GUIDE.md).
+Both **RunClock_v1.0.0-beta.1.zip** and **RunClock_Dependency_Source_v1.0.0-beta.1.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and the [GitHub release guide](GITHUB_RELEASE_GUIDE.md).

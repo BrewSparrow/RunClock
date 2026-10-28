@@ -20,11 +20,13 @@ Time your runs, record splits, and save attempts directly on your PS5. RunClock 
 
 ## Download and install
 
-Open this repository's **Releases** section and select **v1.0.0-beta.1**. Players need **RunClock.elf**, or the install ZIP containing the same ELF plus instructions and notices.
+Open this repository's **Releases** section and select **v1.0.1-beta.2**. Players need **RunClock.elf**, or the install ZIP containing the same ELF plus instructions and notices.
 
-1. **Restart your PS5 before loading this build.** Load RunClock once per boot. Start with other ShellUI overlays, including ProsperoMenu, disabled for that boot.
-2. Start your usual jailbreak and compatible kernel support, then load **RunClock.elf** through Payload Manager.
-3. Wait for the ready notification, then hold **L3 + R3** to open the panel.
+> **Warning:** Loading **RunClock.elf** without first loading **both kstuff and elfldr** can freeze the console. Both must be loaded before starting RunClock.
+
+1. **Fully restart your PS5 before loading this build.** Load RunClock once per boot. Start with other ShellUI overlays, including ProsperoMenu, disabled for that boot.
+2. Start your usual jailbreak, then ensure **kstuff and elfldr are both loaded and have finished starting** before proceeding.
+3. Load **RunClock.elf** through **Payload Manager**. Wait for the ready notification, then hold **L3 + R3** to open the panel.
 4. Select **Start run**. Both clocks update automatically. The panel can be opened from the home screen or during a game on the tested setup.
 
 **Requirements:** a jailbroken PS5 and existing compatible **kstuff injection support**. The tested setup uses firmware **13.60** and Payload Manager. RunClock supplies its own renderer and timing worker. It does not install kernel support or replace another application's ELF. Other firmware and simultaneous system-UI overlays are unverified.
@@ -66,4 +68,4 @@ See [Known issues](KNOWN_ISSUES.md), [console test history](CONSOLE_TEST.md), an
 
 RunClock is **GPL-3.0-or-later**. Its rendering/input foundation is adapted from [StonedModder/Prospero-Menu](https://github.com/StonedModder/Prospero-Menu), revision `84dd26cd342a5d9b1df5a93942ca5d7f10c8d39e`. Original copyright and license notices are retained. RunClock runs independently of that application.
 
-Both **RunClock_v1.0.0-beta.1.zip** and **RunClock_Dependency_Source_v1.0.0-beta.1.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and the [GitHub release guide](GITHUB_RELEASE_GUIDE.md).
+Both **RunClock_v1.0.1-beta.2.zip** and **RunClock_Dependency_Source_v1.0.1-beta.2.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and the [GitHub release guide](GITHUB_RELEASE_GUIDE.md).

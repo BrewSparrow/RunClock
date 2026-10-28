@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/runclock-banner.svg" alt="RunClock standalone PS5 speedrun timer" width="960"></p>
 
-# RunClock v1.0.0-beta.1
+# RunClock v1.0.1-beta.2
 
 **By BrewSparrow**
 

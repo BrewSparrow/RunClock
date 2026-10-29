@@ -6,6 +6,8 @@ jobs:
   host:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      ZIG: zig
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -14,4 +16,13 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
-      - run: python3 scripts/test.py
+      - name: Set up Zig 0.14.1
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.14.1'
+      - name: Verify Zig version
+        run: |
+          zig version
+          test "$(zig version)" = "0.14.1"
+      - name: Run host tests
+        run: python3 scripts/test.py

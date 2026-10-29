@@ -1,8 +1,8 @@
-# Standalone console test
+# PS5 test checklist
 
-The maintainer tested this exact beta ELF on firmware 13.60 through Payload Manager and confirmed in-game opening after a restart. Capture remains incomplete; KNOWN_ISSUES.md and CONSOLE_TEST.md record the current limits. The checklist below is for future testing; it is not a claim that every item passed on hardware.
+RunClock v1.0.2-beta.3 is built from the startup profile that passed five consecutive maintainer launch tests, alternating Restart and complete Shutdown/reboot. Keep that observer enabled. The versioned ELF is rebuilt and has a separate hash; start with one final launch test of this exact artifact before publishing. Keep /data/RunClock intact and load kstuff and elfldr before RunClock, once per boot. If startup fails, retain runtime.log, deck-status.txt, bootstrap-stack.bin if created and runtime.previous.log if present before another launch. See CONSOLE_TEST.md and VALIDATION.md for evidence and limits.
 
-1. Reboot. Start your usual jailbreak/kernel services, then RunClock.elf alone, with ProsperoMenu disabled for this boot. Wait for the ready notification and open with L3 + R3.
+1. Reboot. Load the usual jailbreak and both kstuff and elfldr, wait for them to finish, then load RunClock.elf once, with ProsperoMenu disabled for this boot. Wait for the ready notification and open with L3 + R3.
 2. Verify the app appears without an installed/running menu. Start run: both visible clocks should tick automatically.
 3. Split, pause, wait: active freezes while real elapsed advances. Resume and undo. Test controls while clock digits are changing.
 4. Finish after a few splits, confirm both final values freeze and unused slots stay --. Reset clocks: both zero while the completed result stays saved.
@@ -13,4 +13,4 @@ The maintainer tested this exact beta ELF on firmware 13.60 through Payload Mana
 9. Reboot, reload once, and verify saved records and deletions persist. Active run recovery is not supported.
 10. For future capture work, test Create press/hold/double-press with the panel closed and open, both on the home screen and in a game. Inspect the saved screenshot and clip for the overlay itself. Starting a recording successfully is separate from recording the overlay pixels. This beta has no capture fix.
 
-If startup fails, retain /data/RunClock/runtime/runtime.log and runtime/overlays/runclock/overlay.log. Do not load repeated copies in the same boot; the native UI hooks are resident. Reboot before another build. Report the firmware and exact RunClock ELF hash with the result.
+If startup fails, retain /data/RunClock/runtime/runtime.log, deck-status.txt and bootstrap-stack.bin if present, plus runtime/overlays/runclock/overlay.log. Do not load repeated copies in the same boot; the native UI hooks are resident. Reboot before another build. Report the firmware and exact RunClock ELF hash with the result.

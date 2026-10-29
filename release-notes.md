@@ -1,42 +1,31 @@
-# RunClock v1.0.0-beta.1
+# RunClock v1.0.2-beta.3
 
-**Standalone PS5 speedrun timer by BrewSparrow.**
+Startup and input stability update for RunClock, the standalone PS5 speedrun timer by **BrewSparrow**.
 
-RunClock brings live timing, splits, and locally saved attempts to your PS5. Load **RunClock.elf** through Payload Manager. Everything runs on the console; ProsperoMenu and an external server are not required.
+## Changes
 
-## Included
+- Improved startup sequencing and retained the startup observer used in the successful console tests.
+- Reduced resident integration to the two hooks needed for rendering and input.
+- Removed automatic reinjection after preparation failure and kept resident dependencies loaded on rejection.
+- Improved **L3 + R3** handling for held buttons, skipped samples and brief release bounces.
+- Expanded local startup diagnostics and preserved previous launch logs.
+- Updated the UI, ready notification, banners and release files to **v1.0.2-beta.3**.
 
-- Automatically updating active-time and real-elapsed clocks.
-- Ten default splits and a separate **Finish run** control.
-- Pause/resume, undo, and confirmed reset of both clocks.
-- Local attempts, personal bests, and confirmed deletion.
-- Timing while the panel is hidden; **L3 + R3** opens/closes it.
-- **RunClock v1.0.0-beta.1** header with **BrewSparrow** beneath it.
+## Testing
 
-## Setup
+The underlying startup build passed **five consecutive launches**, alternating between **Restart** and a complete **Shutdown/reboot**, on the maintainer's PS5 running **firmware 13.60**. This release retains that startup path with updated version labels and packaging. Wider compatibility remains beta.
 
-Tested by the maintainer on **PS5 firmware 13.60** through **Payload Manager**, using existing compatible **kstuff injection support**. Other firmware is unverified.
+## Installation
 
-**Restart the PS5, load RunClock once, wait for its ready notification, and hold L3 + R3.** A clean restart restored in-game opening during testing. Keep other ShellUI overlay payloads disabled for the first boot test.
+1. Keep **`/data/RunClock/`** intact when updating and restart the PS5 before loading the new ELF.
+2. Load **Y2JB Autoloader → Payload Manager → kstuff lite → elfldr → RunClock.elf**, waiting for each payload to finish. Both compatible **kstuff and elfldr are required before RunClock**.
+3. Load RunClock once per boot. Wait for the ready notification, then hold **L3 + R3** to open it.
 
-## Known issues
+Players need **RunClock.elf** or the install ZIP containing the same ELF. No ProsperoMenu installation or external server is required. Matching application and dependency source archives accompany the release.
 
-- **The RunClock overlay is absent from PS5 built-in gameplay recordings.** Capture controls were also reported unresponsive while the panel was open. Screen capture support is incomplete and deferred to a later update.
-- **Use the Delete attempt / Confirm delete menu entries during a game.** The current game-input route does not forward the Triangle shortcut; double-Triangle deletion is available from the home-screen panel.
-- Active attempts do not recover through a crash, rest mode, or reboot. Saved attempts persist.
-- There is no always-visible gameplay timer HUD, autosplitting, or automatic load removal. Hardware timing latency has not been measured.
+## Known limitations
 
-## Downloads
-
-| File | Purpose |
-|---|---|
-| `RunClock.elf` | Payload for players |
-| `RunClock_Standalone_Install_v1.0.0-beta.1.zip` | Same payload with instructions and notices |
-| `RunClock_Standalone_Source_v1.0.0-beta.1.zip` | Modified application/engine source and exact build inputs |
-| `RunClock_Dependency_Source_v1.0.0-beta.1.zip` | Corresponding native SDK/library source |
-| `SHA256SUMS.txt` | SHA-256 checksums |
-| `release-manifest.json` | Build identity, verification scope, and asset details |
-
-The executable is unchanged from the maintainer-tested beta build. This finalization updates release documentation, packaging, and the asset verifier. Both source archives and the original notices accompany the binary under **GPL-3.0-or-later**. Rendering/input foundation: **StonedModder/Prospero-Menu**.
-
-Saved data: **`/data/RunClock/`**. Bug reports should include firmware, Payload Manager/kernel setup, whether a game was running, reproduction steps, and the ELF checksum.
+- RunClock is still absent from PS5 built-in gameplay recordings; screenshot and recording support remain deferred.
+- During a game, delete saved attempts using the menu's **Delete attempt → Confirm delete** controls. The double-Triangle shortcut is available from the home-screen panel.
+- Saved attempts persist, but an active run does not recover after a crash, rest mode or reboot.
+- Other firmware versions and simultaneous ShellUI overlays remain unverified.

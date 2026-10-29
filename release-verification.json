@@ -3,7 +3,7 @@
   "version": "1.0.2-beta.3",
   "build_revision": "v1.0.2-beta.3-release",
   "author": "BrewSparrow",
-  "physical_console_tested": false,
+  "physical_console_tested": true,
   "result": "versioned_release_cross_compiled_host_tested_tested_baseline_retained",
   "change_scope": "Version/UI/ready-notification/banner labels and release packaging; startup observer and resident renderer/input module retained from test 6.",
   "firmware": "13.60",

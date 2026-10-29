@@ -1,7 +1,7 @@
 {
   "id": "runclock",
   "name": "RunClock",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.2-beta.3",
   "author": "BrewSparrow",
   "api": 1,
   "kind": "elf",

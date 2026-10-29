@@ -2,6 +2,8 @@
 #pragma once
 #include <stddef.h>
 #include <sys/types.h>
+#include "deck-memory-trace.h"
 void* pm_deck_mmap(void*,size_t,int,int,int,off_t);
 int pm_deck_munmap(void*,size_t);
 int pm_deck_mprotect(void*,size_t,int);
+int pm_deck_mprotect_traced(void*,size_t,int,volatile PmDeckMemoryTrace*);

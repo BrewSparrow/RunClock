@@ -1,0 +1,155 @@
+{
+  "build": {
+    "name": "RunClock",
+    "version": "1.0.2-beta.3",
+    "author": "BrewSparrow",
+    "displayTitle": "RunClock v1.0.2-beta.3",
+    "kind": "standalone-payload",
+    "hardwareVerified": false,
+    "buildIdentity": {
+      "source": "e5ffac5a2a39dce2199b05ec6c523643080f8072d1a7feaa651a12041ae1b322",
+      "bootstrapDiagnostic": true,
+      "components": []
+    },
+    "embeddedAssets": [
+      {
+        "symbol": "prosperomenu_assets",
+        "offset": 4910334,
+        "bytes": 1,
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+      },
+      {
+        "symbol": "prosperomenu_deck",
+        "offset": 4910406,
+        "bytes": 329048,
+        "sha256": "c85fff10334220c90952491dca077f25d9174bd7dffb9b37e64c7a81ff83d731"
+      },
+      {
+        "symbol": "prosperomenu_launch",
+        "offset": 5239525,
+        "bytes": 137120,
+        "sha256": "7bfffc170f8f061b09c557139c46f9b89f0a982469e25948c4f9778feab4a2a3"
+      },
+      {
+        "symbol": "prosperomenu_package",
+        "offset": 5376716,
+        "bytes": 172216,
+        "sha256": "24781b15ebf5ba8f9108790d19bd20b09542fd562c71483431c594e987724959"
+      },
+      {
+        "symbol": "prosperomenu_save",
+        "offset": 5549003,
+        "bytes": 172312,
+        "sha256": "f17db31d5419abf8abd5865467a3f1fdf9ac66a1cfea57ab8b1013627e448fc1"
+      }
+    ],
+    "sha256": "07f91df7252ccc31575cab00a0381e335f813ef56ff3867d16ada6230217934e",
+    "bytes": 10633792,
+    "standalone": true,
+    "requires_prosperomenu": false,
+    "target_firmware": "13.60",
+    "kernel_requirement": "Both compatible kstuff and elfldr loaded and ready before RunClock; neither is bundled or installed.",
+    "worker_sha256": "ff9d6a018a8d68f3a0e800ceb671ffefa667648515e01ccc9d79305554933196",
+    "worker_bytes": 149424,
+    "bridge_ports": [
+      8890,
+      8891
+    ],
+    "bridge_binding": "127.0.0.1",
+    "clock_redraws_preserve_action_generation": true,
+    "physical_console_tested": false,
+    "triangle_delete_confirmation": true,
+    "functional_baseline": {
+      "build_revision": "startup-fault-diagnostic-test-6",
+      "elf_sha256": "702d02eeb7729d4838e4afea64dfa95bced95ec396d8bd8118f64eb4e6097340",
+      "maintainer_report": "Five consecutive successful launches alternating Restart and complete Shutdown/reboot on PS5 13.60.",
+      "startup_attempts": 5,
+      "startup_failures": 0,
+      "observer_enabled": true,
+      "versioned_elf_retest_pending": true
+    },
+    "build_revision": "v1.0.2-beta.3-release",
+    "resident_sdk": {
+      "source": "bundled SDK v0.43",
+      "fresh_coordinator_iommu_handoff": true,
+      "resident_iommu_scan": false,
+      "early_failure": "thread-only rejection",
+      "bootstrap_abi": 16,
+      "syscall_stack_abi_verified": true,
+      "preparation": {
+        "sdk_archive_sha256": "f6b427ce23c56437cb9201685e72d83e88c67e13ae178e61b12fcf8274a44f7d",
+        "resident_only": true,
+        "iommu_scan": false,
+        "syscall_bridge_naked": true,
+        "libc_thread_flag_phase_markers": true,
+        "sources": [
+          "crt.c",
+          "syscall.c",
+          "klog.c",
+          "nid.c",
+          "kernel.c",
+          "rtld.c",
+          "rtld_so.c",
+          "rtld_sprx.c",
+          "rtld_payload.c",
+          "rtld_dlfcn.c",
+          "mdbg.c",
+          "patch.c",
+          "kernel_procio.c",
+          "kernel_iommu.c",
+          "_start.S"
+        ],
+        "kernel_source_sha256": "a2157fc01111ecdca3d363a4ff1120a5adbc6e9a73685d695b891cd6cc6cbaca",
+        "syscall_source_sha256": "2fd995c582e48be347e834778dfa2ecc7fb762fd1cf744488f70647100b068f7",
+        "crt_source_sha256": "c5c43733cfb13441e41c09f0ba79ff14f1907727fc08e42578ce735c755e733c"
+      }
+    },
+    "startup_diagnostic": {
+      "enabled": true,
+      "scope": "first signal through preparation, before publication",
+      "checkpoint_phase": 23,
+      "real_signals_preserved": true,
+      "disarm_before_detach": true,
+      "stack_capture_max_bytes": 8192
+    },
+    "resident_hooks": {
+      "count": 2,
+      "features": [
+        "render",
+        "input"
+      ],
+      "automatic_reinjection": false,
+      "preparation_failure": "retain module and require restart"
+    },
+    "startup_reservation_recovery": "Native boot/process expiry or verified clean intent; same-boot uncertain hooks remain protected."
+  },
+  "toolchain": {
+    "zig": "0.14.1",
+    "node": "v24.22.1",
+    "ps5_payload_sdk": {
+      "release": "v0.43",
+      "url": "https://github.com/ps5-payload-dev/sdk/releases/download/v0.43/ps5-payload-sdk.zip",
+      "bytes": 8814217,
+      "digest": "sha256:a9cc9929f21b2b2c5d5b309f3bab4997067c45281c0622cf4838b1aecba66fcb"
+    }
+  },
+  "maintainer_console_report": {
+    "baseline_version": "1.0.1-beta.2",
+    "baseline_revision": "startup-fault-diagnostic-test-6",
+    "baseline_elf_sha256": "702d02eeb7729d4838e4afea64dfa95bced95ec396d8bd8118f64eb4e6097340",
+    "baseline_source": "20c2b94645b71ab8a492e662adee2c21395effa397db2f75e827f262df06dff7",
+    "firmware": "13.60",
+    "sequence": [
+      "Y2JB Autoloader",
+      "Payload Manager",
+      "kstuff lite",
+      "elfldr",
+      "RunClock"
+    ],
+    "attempts": 5,
+    "failures": 0,
+    "power_cycles": "Alternating Restart and complete Shutdown/reboot",
+    "evidence": "Maintainer report; no new runtime logs supplied.",
+    "exact_versioned_elf_console_verified": false
+  }
+}

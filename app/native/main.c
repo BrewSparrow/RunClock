@@ -13,7 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define RC_VERSION "1.0.0-beta.1"
+#define RC_VERSION "1.0.2-beta.3"
 #define RC_TITLE "RunClock v" RC_VERSION
 #define RC_AUTHOR "BrewSparrow"
 #define RECENT_LIMIT 20

@@ -2,7 +2,11 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
-#define PM_DECK_BOOT_VERSION 13
+#include "deck-kernel-seed.h"
+#include "deck-memory-trace.h"
+#define PM_DECK_BOOT_VERSION 16
+#define PM_DECK_TRACE_RELEASE 0x5443u
+#define PM_DECK_TRACE_ARMED 0x52435436u
 #define PM_DECK_MAX_PATCHES 10
 #define PM_DECK_BOOT_OFFSET 0x800
 #define PM_DECK_BOOT_MAGIC UINT64_C(0x5441434445434b31)
@@ -40,6 +44,11 @@ typedef struct {
  uint32_t dashboardVersionCalls,dashboardVersionDecorated,dashboardVersionError;
  // Retained across coordinator stalls so a later poll can explain a closure.
  uint32_t menuUpdateWaits,menuUpdateExpired;
+ // Fresh, same-injection SDK context. Never loaded from a receipt or file.
+ PmDeckKernelSeed kernelSeed;
+ PmDeckMemoryTrace codeMemory;
+ // Private diagnostic handshake. Never reuses the patch-count field.
+ uint32_t traceRelease,traceArmed;uint64_t traceCheckpoint;
 } PmDeckBoot;
 #ifdef __cplusplus
 static_assert(sizeof(PmDeckBoot)+PM_DECK_BOOT_OFFSET<=0x4000,"Bootstrap record must fit its owned mapping");
@@ -48,6 +57,35 @@ _Static_assert(sizeof(PmDeckBoot)+PM_DECK_BOOT_OFFSET<=0x4000,"Bootstrap record 
 #endif
 
 // Numeric errors cross the process boundary; no managed pointers are exposed.
+static inline const char* pm_deck_boot_phase(uint32_t phase){
+ switch(phase){
+  case 203:return "resident SDK kernel initialization";
+  case 204:return "resident SDK initialization returned";
+  case 205:return "preserve resident process policy";
+  case 206:return "resident linker initialization";
+  case 207:return "resident linker initialized";
+  case 208:return "resident logging initialization";
+  case 209:return "resident logging initialized";
+  case 210:return "resolve resident libc thread flag";
+  case 211:return "set resident libc thread flag";
+  case 212:return "resident libc thread flag set";
+  case 20:return "allocate trampoline buffer";
+  case 21:return "legacy trampoline preparation/sealing";
+  case 22:return "create menu worker";
+  case 23:return "wait for hook publication";
+  case 24:return "hook publication acknowledged";
+  case 300:return "prepare render trampoline";
+  case 301:return "prepare input trampoline";
+  case 310:return "resolve dashboard hooks";
+  case 311:case 312:case 313:return "prepare dashboard trampolines";
+  case 320:return "resolve cheats hooks";
+  case 321:case 322:case 323:case 324:return "prepare cheats trampolines";
+  case 330:return "prepare dashboard version trampoline";
+  case 340:return "isolate and seal trampoline buffer";
+  case 341:return "trampoline buffer sealed";
+  default:return "runtime initialization";
+ }
+}
 static inline const char* pm_deck_prepare_error(uint32_t error){
  switch(error){
   case 101:return "Mono exports";
@@ -85,6 +123,10 @@ static inline const char* pm_deck_prepare_error(uint32_t error){
   case 133:return "owned overlay scene layout/focus methods";
   case 134:return "owned overlay background opacity policy";
   case 135:return "owned overlay front activation passthrough";
+  case 136:return "resident SDK kernel initialization";
+  case 137:return "resident runtime linker initialization";
+  case 138:return "resident diagnostic handshake";
+  case 139:return "resident logging initialization";
   default:return "native bootstrap";
  }
 }

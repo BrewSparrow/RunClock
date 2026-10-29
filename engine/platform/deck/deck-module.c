@@ -6,8 +6,7 @@
 #include "deck-http.h"
 #include "deck-bootstrap.h"
 #include "resident-memory.h"
-#include "dashboard.h"
-#include "cheats-window.h"
+#include "resident-trace.h"
 #include <ps5/kernel.h>
 #include <ps5/payload.h>
 #include <sys/mman.h>
@@ -33,7 +32,6 @@ static uint64_t millis(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,
 static void render(void* instance){
  boot->renderPhase=1;originalUpdate(instance);boot->renderPhase=2;
  if(__atomic_exchange_n(&rendering,1,__ATOMIC_ACQ_REL))return;
- pm_cheats_tick();
  int focus=pm_deck_view_game_focus(&view);
  __atomic_store_n(&gameFocused,focus,__ATOMIC_RELEASE);
  boot->inputFocus=focus;
@@ -89,7 +87,6 @@ static void render(void* instance){
  __atomic_store_n(&ready,presentation.ready,__ATOMIC_RELEASE);
  __atomic_store_n(&visible,presentation.visible,__ATOMIC_RELEASE);
  if(presentation.heartbeat)boot->renderedAt=presentation.heartbeat;
- pm_dashboard_tick(!open&&focus==0&&!pm_cheats_active());
  if(presentation.close&&!pthread_mutex_trylock(&mutex)){
   if(deck.open)deck.drain[deck.owner]=1;deck.open=0;pthread_mutex_unlock(&mutex);
  }
@@ -99,14 +96,14 @@ static PmPad input(int device){
  boot->inputPhase=1;PmPad result=originalInput(device);boot->inputPhase=2;int consume=0;
  boot->inputCalls++;boot->inputDevice=device;boot->inputButtonsSeen|=result.buttons;
  boot->inputSkipped+=!!result.skip;boot->inputReady=__atomic_load_n(&ready,__ATOMIC_ACQUIRE);
- if(!__atomic_load_n(&ready,__ATOMIC_ACQUIRE)||pm_cheats_active())return result;
+ if(!__atomic_load_n(&ready,__ATOMIC_ACQUIRE))return result;
  if(!pthread_mutex_trylock(&mutex)){
   boot->inputRoute=route.active;boot->inputOpen=deck.open;
   boot->inputRequestedRoute=deck.frame.input.active;
   if(__atomic_load_n(&gameFocused,__ATOMIC_ACQUIRE)!=0&&__atomic_load_n(&gameFocused,__ATOMIC_ACQUIRE)!=-2&&route.active==0){pthread_mutex_unlock(&mutex);return result;}
   if(route.active){pthread_mutex_unlock(&mutex);return result;}
   if(device>=0&&device<8&&result.buttons)lastDashboardDevice=(unsigned)device;
-  consume=pm_deck_input(&deck,(unsigned)device,result.buttons,millis());pthread_mutex_unlock(&mutex);
+  consume=pm_deck_input_sample(&deck,(unsigned)device,result.buttons,result.skip,millis());pthread_mutex_unlock(&mutex);
  }else consume=!__atomic_load_n(&gameRouting,__ATOMIC_ACQUIRE)&&__atomic_load_n(&visible,__ATOMIC_ACQUIRE);
  if(consume){result.buttons=result.previous=result.down=result.up=0;result.leftX=result.leftY=result.rightX=result.rightY=0;}
  return result;
@@ -122,13 +119,11 @@ static void* worker(void* ignored){
   PmDeckEvent event;int pending;PmDeckFeedback feedback;
   pthread_mutex_lock(&mutex);pm_deck_route_tick(&deck,&route,millis());pending=pm_deck_event(&deck,&event);
   feedback=pm_deck_route_feedback(&deck,&route,__atomic_load_n(&ready,__ATOMIC_ACQUIRE),renderedAt);pthread_mutex_unlock(&mutex);
-  pm_cheats_poll(credential);
   PmDeckFrame frame;int status=pm_deck_http(8890,credential,pending?&event:NULL,&feedback,&frame);
   int frameStatus=status;
   if(pending&&(status<0||status>=500))frameStatus=pm_deck_http(8890,credential,NULL,&feedback,&frame);
   pthread_mutex_lock(&mutex);
   if(pm_deck_http_has_frame(frameStatus)&&pm_deck_receive(&deck,&frame,sizeof frame,millis())){
-   pm_dashboard_receive(&frame.dashboard);
 
    PmDeckInput inputRoute=frame.input;
    pm_deck_route_focus(&inputRoute,__atomic_load_n(&gameFocused,__ATOMIC_ACQUIRE));
@@ -167,46 +162,44 @@ static int prepare_patch(void* original,void* replacement,void* slot,PmDeckPatch
 // rejected and uncertain publication alike. Metadata preparation has already
 // detached this thread from Mono, so sleeping does not obstruct managed GC.
 static _Noreturn void resident_wait(void){for(;;)sleep(3600);}
-int main(void){
+static _Noreturn void resident_reject(unsigned error){
+ __atomic_store_n(&workerStop,1,__ATOMIC_RELEASE);
+ __atomic_store_n(&workerRunning,0,__ATOMIC_RELEASE);
+ boot->error=error;boot->state=3;pm_deck_trace_checkpoint(boot);resident_wait();
+}
+_Noreturn int main(void){
  boot=(volatile PmDeckBoot*)((unsigned char*)payload_get_args()+PM_DECK_BOOT_OFFSET);
- if(boot->magic!=PM_DECK_BOOT_MAGIC||boot->version!=PM_DECK_BOOT_VERSION||boot->state||boot->credential[32])return -1;
+ if(boot->magic!=PM_DECK_BOOT_MAGIC||boot->version!=PM_DECK_BOOT_VERSION||boot->state||boot->credential[32])resident_wait();
  memcpy(credential,(const void*)boot->credential,33);
- for(unsigned i=0;i<32;i++)if(!((credential[i]>='0'&&credential[i]<='9')||(credential[i]>='a'&&credential[i]<='f')))return -1;
+ for(unsigned i=0;i<32;i++)if(!((credential[i]>='0'&&credential[i]<='9')||(credential[i]>='a'&&credential[i]<='f')))resident_reject(1);
  boot->phase=10;pm_deck_init(&deck);void* update=NULL;void* get=NULL;
- if(!pm_deck_view_prepare(&view,&update,&get,&boot->phase)){boot->error=view.prepareError?view.prepareError:1;boot->state=3;return -1;}
+ if(!pm_deck_view_prepare(&view,&update,&get,&boot->phase)){resident_reject(view.prepareError?view.prepareError:1);}
  // Preparation has resolved metadata only; no managed scene/style handles yet.
  // Copy immutable bindings now, before the two renderers acquire owned objects.
  hud=view;hud.hud=1;hud.animate=0;hud.prepareTrace=NULL;
  boot->phase=20;void* arena=pm_deck_mmap(NULL,0x4000,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
- if(arena==MAP_FAILED){boot->error=2;boot->state=3;return -1;}
- boot->phase=21;PmDeckPatch patches[PM_DECK_MAX_PATCHES]={0};unsigned patchCount=2;
- if(!prepare_patch(update,render,arena,&patches[0])||!prepare_patch(get,input,(unsigned char*)arena+512,&patches[1])){
-  pm_deck_munmap(arena,0x4000);boot->error=3;boot->state=3;return -1;
+ if(arena==MAP_FAILED){resident_reject(2);}
+ boot->phase=300;PmDeckPatch patches[PM_DECK_MAX_PATCHES]={0};unsigned patchCount=2;
+ if(!prepare_patch(update,render,arena,&patches[0])){
+  pm_deck_munmap(arena,0x4000);resident_reject(3);
  }
- void*targets[3]={0},*replacements[3]={0},*trampolines[3]={0};
- if(pm_dashboard_prepare(&view.mono,view.domain,targets,replacements)){
-  unsigned i;for(i=0;i<3;i++){trampolines[i]=(unsigned char*)arena+(i+2)*512;if(!prepare_patch(targets[i],replacements[i],trampolines[i],&patches[i+2]))break;}
-  if(i==3){pm_dashboard_originals(trampolines);pm_dashboard_bind(boot);patchCount=5;}
-  else boot->dashboardError=50+i;
- }else boot->dashboardError=pm_dashboard_prepare_error();
- void*ct[4]={0},*cr[4]={0},*co[4]={0};
- if(patchCount==5&&pm_cheats_prepare(&view.mono,view.domain,ct,cr)){
-  unsigned i;for(i=0;i<4;i++){co[i]=(unsigned char*)arena+(i+5)*512;if(!prepare_patch(ct[i],cr[i],co[i],&patches[i+5]))break;}
-  if(i==4){pm_cheats_originals(co);pm_cheats_bind(boot);patchCount=9;}else boot->cheatsError=20+i;
- }else boot->cheatsError=1;
- // Version decoration is independent: failure leaves the title-ID/cheats
- // hooks and main menu usable. Never replace identifiers in the game database.
- if(patchCount==9){
-  void*vt=NULL,*vr=NULL,*original=(unsigned char*)arena+9*512;
-  if(pm_dashboard_version_prepare(&vt,&vr)&&prepare_patch(vt,vr,original,&patches[9])){pm_dashboard_version_original(original);patchCount=10;}
-  else boot->dashboardVersionError=1;
+ boot->phase=301;
+ if(!prepare_patch(get,input,(unsigned char*)arena+512,&patches[1])){
+  pm_deck_munmap(arena,0x4000);resident_reject(3);
  }
- if(kernel_mprotect(getpid(),(uintptr_t)arena,0x4000,PROT_READ|PROT_EXEC)){pm_deck_munmap(arena,0x4000);boot->error=3;boot->state=3;return -1;}
+ // RunClock publishes only render/input hooks. Dashboard decoration, game
+ // Options actions, cheats and version hooks are outside this timer.
+ boot->phase=340;
+ if(pm_deck_mprotect_traced(arena,0x4000,PROT_READ|PROT_EXEC,&boot->codeMemory)){pm_deck_munmap(arena,0x4000);resident_reject(3);}
+ boot->phase=341;
  originalUpdate=(void(*)(void*))arena;originalInput=(PmPad(*)(int))((unsigned char*)arena+512);
  memcpy((void*)boot->patches,patches,patchCount*sizeof patches[0]);boot->count=patchCount;
- boot->phase=22;pthread_t thread;if(pthread_create(&thread,NULL,worker,NULL)){boot->error=4;boot->state=3;return -1;}
+ boot->phase=22;pthread_t thread;if(pthread_create(&thread,NULL,worker,NULL)){resident_reject(4);}
  pthread_detach(thread);
- __atomic_thread_fence(__ATOMIC_RELEASE);boot->phase=23;boot->state=1;
+ __atomic_thread_fence(__ATOMIC_RELEASE);boot->phase=23;
+ // Diagnostic observer ends only after complete preparation, before any
+ // original method is patched. Normal builds compile this to a no-op.
+ pm_deck_trace_checkpoint(boot);boot->state=1;
  for(unsigned i=0;i<1500;i++){
   if(boot->state==2){boot->phase=24;boot->state=4;resident_wait();}if(boot->state==3){__atomic_store_n(&workerStop,1,__ATOMIC_RELEASE);resident_wait();}usleep(10000);
  }

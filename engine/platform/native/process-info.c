@@ -16,6 +16,7 @@ int pm_process_info(pid_t pid,struct kinfo_proc* out){
  const size_t minimum=start_end>name_end?start_end:name_end;
  int mib[]={CTL_KERN,KERN_PROC,KERN_PROC_PID,pid};size_t needed=0;
  if(sysctl(mib,4,NULL,&needed,NULL,0))return -1;
+ if(!needed){errno=ESRCH;return -1;}
  if(needed<minimum||needed>65536){errno=EINVAL;return -1;}
  void* record=malloc(needed);if(!record){errno=ENOMEM;return -1;}
  size_t length=needed;int result=sysctl(mib,4,record,&length,NULL,0),error=errno;

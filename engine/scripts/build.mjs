@@ -12,6 +12,9 @@ import { FIRMWARES } from '../src/firmware.mjs';
 import { makeUpdatePackage } from '../src/update-format.mjs';
 import { embeddingAssembly, verifyEmbeddedAsset } from './embedded-assets.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Retain the startup observer used in the five successful maintainer tests.
+// Its profile is fingerprinted; disabling it produces a different build.
+const bootstrapDiagnostic=process.env.PROSPEROMENU_BOOTSTRAP_TRACE!=='0';
 const sdk = path.resolve(process.env.PS5_PAYLOAD_SDK || path.join(root, '../ps-neighbourhood/tools/ps5-sdk-0.43/ps5-payload-sdk'));
 const zig = process.env.ZIG || path.join(root, '../ps-neighbourhood/tools/zig-x86_64-windows-0.14.1/zig.exe');
 await fs.mkdir(path.join(root, 'build'), { recursive: true });
@@ -56,7 +59,7 @@ const alias = {
   'node:net': path.join(root, 'platform/runtime/net.mjs'),
   'node:path': 'path-browserify', 'stream': 'readable-stream', 'buffer': 'buffer/', 'events': 'events/'
 };
-const buildIdentity = { source: await sourceFingerprint(root), components: components.map(({ id, version, sha256 }) => ({ id, version, sha256 })) };
+const buildIdentity = { source: await sourceFingerprint(root), bootstrapDiagnostic, components: components.map(({ id, version, sha256 }) => ({ id, version, sha256 })) };
 await fs.writeFile(path.join(root,'build/update-source.h'), '#define PROSPEROMENU_SOURCE_HASH "' + buildIdentity.source + '"\n');
 await build({ absWorkingDir: root, entryPoints: ['platform/console-entry.mjs'], bundle: true, platform: 'browser',
   format: 'iife', target: 'es2022', outfile: 'build/runtime.js', alias, define: { PROSPEROMENU_BUILD: JSON.stringify(buildIdentity) } });
@@ -66,7 +69,7 @@ const q = 'vendor/quickjs';
 const sources = ['platform/runtime/host.c', 'platform/runtime/hash-bindings.c', 'build/assets.S', 'platform/deck/publication.c',
     'platform/native/app-launch-worker.c', 'platform/native/app-launch-io.c', 'platform/native/catalog.c', 'platform/native/download-core.c', 'platform/native/download-worker.c',
     'platform/native/update-core.c','platform/native/update-io.c','platform/native/update-bindings.c',
-    ...['elf-image.c', 'elf-map.c', 'loader-worker.c', 'loader-bindings.c', 'system-probe.c', 'native-operation.c', 'deck-inject.c', 'deck-launch.c', 'deck-worker.c', 'trace-wait.c',
+    ...['elf-image.c', 'elf-map.c', 'loader-worker.c', 'loader-bindings.c', 'system-probe.c', 'native-operation.c', 'deck-inject.c', 'deck-launch.c', 'deck-worker.c', 'trace-wait.c', 'bootstrap-observer.c',
       'package-core.c', 'package-io.c', 'package-worker.c', 'save-core.c', 'save-io.c', 'save-worker.c', 'save-recovery.c', 'save-recovery-io.c', 'game-info.c', 'game-source.c', 'game-metadata.c', 'plugin-image.c', 'dispatch-receipt.c', 'game-inject.c', 'game-imports.c', 'process-current.c', 'process-info.c', 'overlay-worker.c',
       'prx-image.c', 'module-session.c', 'module-storage.c', 'module-worker.c', 'goldhen-compat.c', 'goldhen-worker.c', 'process-fresh.c', 'memory-map.c', 'cheat-transaction.c', 'cheat-worker.c', 'memory-inspect.c', 'fps-counters.c', 'telemetry-worker.c', 'user-read.c'].map(file => 'platform/native/' + file),
   'platform/native/fps-inject.c', 'platform/native/bc-fps-worker.c', 'platform/game/fps-trampoline.cpp',
@@ -114,17 +117,38 @@ for(const source of ['platform/native/app-launch-helper.c','platform/native/app-
 }
 run(['ld.lld','--no-dependent-libraries','--wrap=kernel_get_proc','-pie','--hash-style=gnu','-z','max-page-size=0x4000','-T',sdk+'/ldscripts/elf_x86_64.x',...launchObjects,...posixAt,sdk+'/target/lib/crt1.o','-L',sdk+'/target/lib','--start-group',sdk+'/target/lib/libc.a','-ldl','--end-group','-lkernel_web','-lSceLibcInternal','-o','build/prosperomenu-launch-helper.elf']);
 const deckObjects = [];
-const bootstrapTrace=process.env.PROSPEROMENU_BOOTSTRAP_TRACE==='1'?['-DPROSPEROMENU_BOOTSTRAP_TRACE','-DPROSPEROMENU_BOOTSTRAP_SCAN']:[];
+// Rebuild only the resident CRT from the bundled, pinned SDK source. Its
+// kernel initializer receives a checked, same-launch IOMMU address instead
+// of scanning arbitrary pointer-shaped values inside the ShellUI process.
+{
+  const result=spawnSync('python3',['scripts/prepare-resident-crt.py'],{cwd:root,encoding:'utf8'});
+  if(result.status!==0)throw Error(result.stderr||'Resident CRT preparation failed');
+}
+const residentCrtManifest=JSON.parse(await fs.readFile(path.join(root,'build/resident-crt/manifest.json')));
+const residentCrtObjects=[];
+for(const source of residentCrtManifest.sources){
+  const object='build/resident-crt/'+source+'.o';
+  run([...compile,'-O1','-ffreestanding','-fno-builtin','-fPIC','-fms-extensions',
+    '-Wno-microsoft-anon-tag','-Wall','-Werror',...(source.endsWith('.S')?['-masm=intel']:[]),
+    '-c','build/resident-crt/'+source,'-o',object]);
+  residentCrtObjects.push(object);
+}
+const bootstrapTrace=bootstrapDiagnostic?['-DPROSPEROMENU_BOOTSTRAP_TRACE','-DPROSPEROMENU_BOOTSTRAP_SCAN']:[];
 for (const source of ['platform/deck/deck-core.c', 'platform/deck/deck-route.c', 'platform/deck/deck-http.c', 'platform/deck/mono-api.c',
-  'platform/deck/deck-view.c', 'platform/deck/dashboard.c', 'platform/deck/cheats-window.c', 'platform/deck/deck-layout.c', 'platform/deck/deck-layout-docked.c', 'platform/deck/deck-module.c', 'platform/deck/pui-probe.c', 'platform/deck/resident-init.c', 'platform/deck/resident-memory.c', 'platform/deck/trampoline.cpp', 'vendor/deck/relocate.cpp', 'vendor/deck/hde64.cpp', 'platform/native/process-fresh.c']) {
+  'platform/deck/deck-view.c', 'platform/deck/deck-layout.c', 'platform/deck/deck-layout-docked.c', 'platform/deck/deck-module.c', 'platform/deck/pui-probe.c', 'platform/deck/resident-init.c', 'platform/deck/resident-memory.c', 'platform/deck/resident-kernel-seed.c', 'platform/deck/trampoline.cpp', 'vendor/deck/relocate.cpp', 'vendor/deck/hde64.cpp', 'platform/native/process-fresh.c']) {
   const object = 'build/' + source.replaceAll('/', '_') + '.o';
   run([...compile, ...bootstrapTrace, '-Iplatform/deck', '-Ivendor/deck', '-DHDE_DECODE_ONLY',
     ...(source.endsWith('.cpp') ? ['-std=c++17', '-fno-exceptions', '-fno-rtti'] : ['-std=c11']), '-c', source, '-o', object]);
   deckObjects.push(object);
 }
 run(['ld.lld', '--no-dependent-libraries', '--wrap=kernel_get_proc', '-pie', '--hash-style=gnu', '-z', 'max-page-size=0x4000', '-T', sdk + '/ldscripts/elf_x86_64.x',
-  '--wrap=__patch_init', '--wrap=__crt_syscall_init', '--wrap=__kernel_init', '--wrap=__rtld_init', '--wrap=kernel_copyout', ...deckObjects, sdk + '/target/lib/crt1.o', '-L', sdk + '/target/lib', '--start-group', sdk + '/target/lib/libc.a',
+  '--wrap=__patch_init', '--wrap=__crt_syscall_init', '--wrap=__kernel_init', '--wrap=__klog_init', '--wrap=__rtld_init', '--wrap=kernel_copyout', ...deckObjects, ...residentCrtObjects, '-L', sdk + '/target/lib', '--start-group', sdk + '/target/lib/libc.a',
   '-ldl', '--end-group', '-lkernel_sys', '-lSceLibcInternal', '-o', 'build/prosperomenu-deck.elf']);
+{
+  const result=spawnSync('python3',['scripts/verify-resident-syscall.py','build/prosperomenu-deck.elf'],{cwd:root,encoding:'utf8'});
+  if(result.status!==0)throw Error(result.stderr||'Resident syscall ABI verification failed');
+  console.log(result.stdout.trim());
+}
 const embeddedAssets = [];
 for (const [symbol, file] of [['assets', 'components.bin'], ['deck', 'prosperomenu-deck.elf'],
   ['launch','prosperomenu-launch-helper.elf'], ['package', 'prosperomenu-package-helper.elf'], ['save', 'prosperomenu-save-helper.elf']]) {
@@ -143,5 +167,5 @@ run(['ld.lld', '--no-dependent-libraries', '--wrap=syscall', '--wrap=__syscall',
 const elf = await fs.readFile(path.join(root, 'build/prosperomenu-runtime.elf'));
 const embeddedAssetChecks = embeddedAssets.map(asset => verifyEmbeddedAsset(elf, asset.symbol, asset.bytes));
 await fs.copyFile(path.join(root,'build/prosperomenu-runtime.elf'),path.join(root,'../dist/RunClock.elf'));
-await fs.writeFile(path.join(root,'../dist/build-manifest.json'),JSON.stringify({name:'RunClock',version:'1.0.0-beta.1',author:'BrewSparrow',displayTitle:'RunClock v1.0.0-beta.1',kind:'standalone-payload',hardwareVerified:false,buildIdentity,embeddedAssets:embeddedAssetChecks,sha256:createHash('sha256').update(elf).digest('hex'),bytes:elf.length},null,2)+'\n');
+await fs.writeFile(path.join(root,'../dist/build-manifest.json'),JSON.stringify({name:'RunClock',version:'1.0.2-beta.3',author:'BrewSparrow',displayTitle:'RunClock v1.0.2-beta.3',kind:'standalone-payload',hardwareVerified:false,buildIdentity,embeddedAssets:embeddedAssetChecks,sha256:createHash('sha256').update(elf).digest('hex'),bytes:elf.length},null,2)+'\n');
 console.log('Built standalone RunClock.elf ('+elf.length+' bytes); physical-console verification pending.');

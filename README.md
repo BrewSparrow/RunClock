@@ -44,6 +44,7 @@ If the panel opens on the home screen but fails to open in a game, restart the c
 | Undo last split | Remove the latest unfinished checkpoint |
 | Reset clocks → Confirm reset clocks | Clear both clocks; save an unfinished attempt as reset |
 | Records → attempt → Delete attempt → Confirm delete | Delete that saved result and recalculate the personal best |
+| Triangle, then a second Triangle press in saved-attempt details | Open/confirm deletion from the home-screen panel; use the menu controls during a game |
 | Circle | Go back, cancel a confirmation, or close the main panel |
 
 Finish can save a run with zero, some, or all splits recorded. Unused splits stay `--`. Holding a button cannot confirm deletion. Resetting the clocks keeps completed records.
@@ -70,4 +71,4 @@ See [Known issues](KNOWN_ISSUES.md), [console test history](CONSOLE_TEST.md), an
 
 RunClock is **GPL-3.0-or-later**. Its rendering/input foundation is adapted from [StonedModder/Prospero-Menu](https://github.com/StonedModder/Prospero-Menu), revision `84dd26cd342a5d9b1df5a93942ca5d7f10c8d39e`. Original copyright and license notices are retained. RunClock runs independently of that application.
 
-Both **RunClock_v1.0.2-beta.3.zip** and **RunClock_Dependency_Source_v1.0.2-beta.3.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and [startup recovery instructions](STARTUP_FIX.md).
+Both **RunClock_Standalone_Source_v1.0.2-beta.3.zip** and **RunClock_Dependency_Source_v1.0.2-beta.3.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and [startup recovery instructions](STARTUP_FIX.md).

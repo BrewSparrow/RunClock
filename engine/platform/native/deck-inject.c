@@ -4,6 +4,7 @@
 #include "deck-inject.h"
 #include "deck-launch.h"
 #include "deck-bootstrap.h"
+extern uintptr_t KERNEL_ADDRESS_IOMMU_SOFTC;
 #include "publication.h"
 #include "deck-protection.h"
 #include "pt.h"
@@ -16,6 +17,7 @@
 #include <errno.h>
 #ifdef PROSPEROMENU_BOOTSTRAP_TRACE
 #include <signal.h>
+#include "bootstrap-observer.h"
 #endif
 extern intptr_t pm_elf_map(pid_t,const uint8_t*,size_t);
 extern intptr_t pm_payload_args(pid_t);
@@ -69,51 +71,74 @@ static void log_kernel_scan(const PmDeckBoot* s){
    (unsigned long long)r->address,(unsigned long long)r->length,r->complete,r->result);
  }
 }
-// Diagnostic-only: observe the first signal before Mono can proxy/re-raise it.
-// A known, address-checked checkpoint ends tracing after kernel initialization.
-// Other signals are delivered unchanged. No filesystem I/O while stopped.
-static int trace_bootstrap(pid_t pid,intptr_t control,int* attached){
- uint32_t release=0x5443;int timedOut=0,tid=0,signal=0,code=0,stopped=0;
- uintptr_t fault=0;struct reg regs={0};PmDeckBoot state={0};uint8_t bytes[32]={0};
- int haveRegs=0,haveBytes=0,haveState=0,ownTrap=0,haveEarlyPointer=0;uint64_t earlyPointer=0;
- uint8_t stack[8192];size_t stackBytes=0;int controlProtection=-1;
- if(pt_copyin(pid,&release,control+offsetof(PmDeckBoot,count),sizeof release)||pt_continue(pid,0))return -1;
- int waitSignal=0;
- if(!pt_wait_signal(pid,8000,&waitSignal))stopped=1;
- else if(errno==ETIMEDOUT){
-  timedOut=1;if(!kill(pid,SIGSTOP)&&!pt_wait_signal(pid,1000,&waitSignal))stopped=1;
+// Diagnostic only: observe through full preparation, before hook publication.
+// Keep all captured bytes local until detach; preserve every real signal.
+typedef struct {
+ pid_t pid;intptr_t control;int* attached;
+ PmBootstrapObservation observation;
+ int tid,code,haveRegs,haveBytes,haveState;
+ uintptr_t fault;struct reg regs;PmDeckBoot state;uint8_t bytes[32],stack[8192];
+ size_t stackBytes;int controlProtection,ripProtection,rspProtection;
+} BootstrapCapture;
+static int trace_release(void* context){
+ BootstrapCapture* c=context;uint32_t armed=PM_DECK_TRACE_ARMED,release=PM_DECK_TRACE_RELEASE;
+ return pt_copyin(c->pid,&armed,c->control+offsetof(PmDeckBoot,traceArmed),sizeof armed)||
+  pt_copyin(c->pid,&release,c->control+offsetof(PmDeckBoot,traceRelease),sizeof release);
+}
+static int trace_resume(void* context){return pt_continue(((BootstrapCapture*)context)->pid,0);}
+static int trace_signal_wait(void* context,unsigned timeout,int* signal){
+ if(!pt_wait_signal(((BootstrapCapture*)context)->pid,timeout,signal))return 0;
+ return errno==ETIMEDOUT?1:-1;
+}
+static int trace_interrupt(void* context){return kill(((BootstrapCapture*)context)->pid,SIGSTOP);}
+static int trace_disarm(void* context){
+ BootstrapCapture* c=context;uint32_t off=0;
+ return pt_copyin(c->pid,&off,c->control+offsetof(PmDeckBoot,traceArmed),sizeof off);
+}
+static int trace_detach(void* context,int signal){
+ BootstrapCapture* c=context;if(pt_detach(c->pid,signal))return -1;*c->attached=0;return 0;
+}
+static int trace_capture(void* context,int* signal){
+ BootstrapCapture* c=context;int actualSignal=0;
+ int info=!pt_stop_info(c->pid,&c->tid,&actualSignal,&c->code,&c->fault);
+ if(actualSignal)*signal=actualSignal;
+ c->haveRegs=info&&c->tid>0&&!pt_getregs(c->tid,&c->regs);
+ c->haveState=!pt_copyout(c->pid,c->control,&c->state,sizeof c->state);
+ if(c->haveState&&(c->state.magic!=PM_DECK_BOOT_MAGIC||c->state.version!=PM_DECK_BOOT_VERSION))c->haveState=0;
+ if(c->haveRegs)c->haveBytes=!pt_copyout(c->pid,c->regs.r_rip,c->bytes,sizeof c->bytes);
+ uint8_t opcode=0;
+ int own=info&&c->haveRegs&&c->haveState&&*signal==SIGTRAP&&
+  c->state.traceArmed==PM_DECK_TRACE_ARMED&&c->state.traceRelease==PM_DECK_TRACE_RELEASE&&
+  ((c->state.phase==23&&c->state.state==0)||c->state.state==3)&&
+  c->state.traceCheckpoint&&c->regs.r_rip==c->state.traceCheckpoint&&
+  !pt_copyout(c->pid,c->regs.r_rip-1,&opcode,1)&&opcode==0xcc;
+ if(!own&&c->haveRegs){
+  size_t available=0x4000-(c->regs.r_rsp&0x3fff);if(available>sizeof c->stack)available=sizeof c->stack;
+  if(!pt_copyout(c->pid,c->regs.r_rsp,c->stack,available))c->stackBytes=available;
+  c->controlProtection=kernel_get_vmem_protection(c->pid,c->control,sizeof c->state);
+  c->ripProtection=kernel_get_vmem_protection(c->pid,c->regs.r_rip,1);
+  c->rspProtection=kernel_get_vmem_protection(c->pid,c->regs.r_rsp,1);
  }
- if(!stopped)return -1;
- int haveInfo=!pt_stop_info(pid,&tid,&signal,&code,&fault);
- if(!signal)signal=waitSignal;
- haveRegs=haveInfo&&tid>0&&!pt_getregs(tid,&regs);
- haveState=!pt_copyout(pid,control,&state,sizeof state);
- if(haveState&&(state.magic!=PM_DECK_BOOT_MAGIC||state.version!=PM_DECK_BOOT_VERSION))haveState=0;
- if(haveState&&state.phase==201&&state.kernelReadLength==(uint64_t)control&&state.kernelReadAddress)
-  haveEarlyPointer=!pt_copyout(pid,state.kernelReadAddress,&earlyPointer,sizeof earlyPointer);
- if(haveRegs)haveBytes=!pt_copyout(pid,regs.r_rip,bytes,sizeof bytes);
- ownTrap=haveInfo&&haveRegs&&haveState&&signal==SIGTRAP&&state.phase==204&&state.reservedTrace==3&&regs.r_rip==state.kernelReadAddress;
- if(!ownTrap&&haveRegs){
-  size_t available=0x4000-(regs.r_rsp&0x3fff);if(available>sizeof stack)available=sizeof stack;
-  if(!pt_copyout(pid,regs.r_rsp,stack,available))stackBytes=available;
-  controlProtection=kernel_get_vmem_protection(pid,control,sizeof state);
+ return own;
+}
+static int trace_bootstrap(BootstrapCapture* c){
+ PmBootstrapObserverOps ops={c,trace_release,trace_resume,trace_signal_wait,trace_interrupt,trace_capture,trace_disarm,trace_detach};
+ return pm_bootstrap_observe(&ops,&c->observation);
+}
+static void log_bootstrap_capture(const BootstrapCapture* c){
+ const PmBootstrapObservation* r=&c->observation;
+ fprintf(stderr,"RunClock bootstrap first stop: tid=%d signal=%d code=%d fault=0x%llx timeout=%d checkpoint=%d phase=%u regs=%d disarmed=%d detached=%d deliver=%d\n",
+  c->tid,r->signal,c->code,(unsigned long long)c->fault,r->timedOut,r->checkpoint,c->haveState?c->state.phase:0,c->haveRegs,r->disarmed,r->detached,r->deliver);
+ if(c->haveState)log_kernel_scan(&c->state);
+ if(!r->checkpoint){
+  fprintf(stderr,"RunClock bootstrap fault capture: controlProtection=0x%x ripProtection=0x%x rspProtection=0x%x stackAddress=0x%llx stackBytes=%zu\n",c->controlProtection,c->ripProtection,c->rspProtection,(unsigned long long)c->regs.r_rsp,c->stackBytes);
+  if(c->stackBytes){FILE* file=fopen("/data/RunClock/runtime/bootstrap-stack.bin","wb");int saved=0;if(file){size_t wrote=fwrite(c->stack,1,c->stackBytes,file);int closed=fclose(file);saved=wrote==c->stackBytes&&!closed;}
+   fprintf(stderr,"RunClock bootstrap stack saved: ok=%d bytes=%zu\n",saved,c->stackBytes);}
  }
- // If timeout raced a real fault, preserve that fault rather than swallowing it.
- int deliver=ownTrap||(timedOut&&signal==SIGSTOP)?0:signal;
- if(pt_detach(pid,deliver))return -1;*attached=0;
- fprintf(stderr,"ProsperoMenu bootstrap first stop: tid=%d signal=%d code=%d fault=0x%llx timeout=%d checkpoint=%d phase=%u regs=%d\n",
-  tid,signal,code,(unsigned long long)fault,timedOut,ownTrap,haveState?state.phase:0,haveRegs);
- if(haveState)log_kernel_scan(&state);
- if(haveEarlyPointer)fprintf(stderr,"ProsperoMenu CRT trace pointer: slot=0x%llx expected=0x%llx observed=0x%llx\n",
-  (unsigned long long)state.kernelReadAddress,(unsigned long long)control,(unsigned long long)earlyPointer);
- if(!ownTrap){fprintf(stderr,"ProsperoMenu bootstrap fault capture: controlProtection=0x%x stackAddress=0x%llx stackBytes=%zu\n",controlProtection,(unsigned long long)regs.r_rsp,stackBytes);
-  if(stackBytes){FILE* capture=fopen("/data/RunClock/runtime/bootstrap-stack.bin","wb");int saved=0;if(capture){size_t wrote=fwrite(stack,1,stackBytes,capture);int closed=fclose(capture);saved=wrote==stackBytes&&!closed;}
-   fprintf(stderr,"ProsperoMenu bootstrap stack saved: ok=%d bytes=%zu\n",saved,stackBytes);}
- }
- if(haveRegs)fprintf(stderr,"ProsperoMenu bootstrap registers: rip=0x%llx rsp=0x%llx rbp=0x%llx rax=0x%llx rbx=0x%llx rcx=0x%llx rdx=0x%llx rsi=0x%llx rdi=0x%llx r12=0x%llx r13=0x%llx r14=0x%llx r15=0x%llx\n",
-  (unsigned long long)regs.r_rip,(unsigned long long)regs.r_rsp,(unsigned long long)regs.r_rbp,(unsigned long long)regs.r_rax,(unsigned long long)regs.r_rbx,(unsigned long long)regs.r_rcx,(unsigned long long)regs.r_rdx,(unsigned long long)regs.r_rsi,(unsigned long long)regs.r_rdi,(unsigned long long)regs.r_r12,(unsigned long long)regs.r_r13,(unsigned long long)regs.r_r14,(unsigned long long)regs.r_r15);
- if(haveBytes){fputs("ProsperoMenu bootstrap instruction:",stderr);for(unsigned i=0;i<sizeof bytes;i++)fprintf(stderr," %02x",bytes[i]);fputc('\n',stderr);}
- fflush(stderr);return ownTrap?0:-1;
+ if(c->haveRegs)fprintf(stderr,"RunClock bootstrap registers: rip=0x%llx rsp=0x%llx rbp=0x%llx rax=0x%llx rbx=0x%llx rcx=0x%llx rdx=0x%llx rsi=0x%llx rdi=0x%llx r12=0x%llx r13=0x%llx r14=0x%llx r15=0x%llx\n",
+  (unsigned long long)c->regs.r_rip,(unsigned long long)c->regs.r_rsp,(unsigned long long)c->regs.r_rbp,(unsigned long long)c->regs.r_rax,(unsigned long long)c->regs.r_rbx,(unsigned long long)c->regs.r_rcx,(unsigned long long)c->regs.r_rdx,(unsigned long long)c->regs.r_rsi,(unsigned long long)c->regs.r_rdi,(unsigned long long)c->regs.r_r12,(unsigned long long)c->regs.r_r13,(unsigned long long)c->regs.r_r14,(unsigned long long)c->regs.r_r15);
+ if(c->haveBytes){fputs("RunClock bootstrap instruction:",stderr);for(unsigned i=0;i<sizeof c->bytes;i++)fprintf(stderr," %02x",c->bytes[i]);fputc('\n',stderr);}
+ fflush(stderr);
 }
 #endif
 int pm_deck_inject(pid_t pid,const uint8_t* image,size_t bytes,const char credential[33],intptr_t* control,int(*identity)(void*),void* cookie,int* resumed){
@@ -122,14 +147,27 @@ int pm_deck_inject(pid_t pid,const uint8_t* image,size_t bytes,const char creden
  // means the injection hung or crashed inside.
  {FILE* entered=fopen("/data/RunClock/runtime/deck-status.txt","w");if(entered){fputs("deck injector entered\n",entered);fclose(entered);}}
  *control=0;*resumed=1;int attached=0,ok=0;intptr_t code=0,params=0,entry=0;PmDeckLaunch launch={0};
+#ifdef PROSPEROMENU_BOOTSTRAP_TRACE
+ BootstrapCapture capture={.pid=pid,.attached=&attached,.controlProtection=-1,.ripProtection=-1,.rspProtection=-1};int traceStarted=0;
+ fprintf(stderr,"RunClock v1.0.2-beta.3 startup observer: observing through preparation before hook publication\n");fflush(stderr);
+ // Pair fresh runtime evidence with a fresh stack; keep one previous capture.
+ rename("/data/RunClock/runtime/bootstrap-stack.bin","/data/RunClock/runtime/bootstrap-stack.previous.bin");
+#endif
  Publication context={.pid=pid,.identity=identity,.cookie=cookie};
- const char* check="attach";PmDeckBoot last={0};int haveStatus=0;
- if(pt_attach_owned(pid,&attached))goto done;
+ const char* check="verify resident kernel seed";PmDeckBoot last={0};int haveStatus=0;
+ PmDeckBoot initial={0};initial.magic=PM_DECK_BOOT_MAGIC;initial.version=PM_DECK_BOOT_VERSION;memcpy(initial.credential,credential,33);
+ check="verify resident kernel seed";
+ initial.kernelSeed=(PmDeckKernelSeed){.magic=PM_DECK_KERNEL_SEED_MAGIC,.version=PM_DECK_KERNEL_SEED_VERSION,
+  .dataBase=KERNEL_ADDRESS_DATA_BASE,.iommu=KERNEL_ADDRESS_IOMMU_SOFTC,.firmware=kernel_get_fw_version(),.pid=(uint32_t)pid};
+ uint64_t device=0;
+ if(!pm_deck_seed_valid(&initial.kernelSeed,KERNEL_ADDRESS_DATA_BASE,kernel_get_fw_version(),(uint32_t)pid)||
+    kernel_copyout((intptr_t)(initial.kernelSeed.iommu+0x48),&device,sizeof device)||device!=PM_DECK_IOMMU_ID)goto done;
+ fprintf(stderr,"RunClock resident SDK context: fresh coordinator seed verified for pid=%d; kernel scan disabled in resident\n",pid);fflush(stderr);
+ check="attach";if(pt_attach_owned(pid,&attached))goto done;
  check="attached process identity";if(!identity||!identity(cookie))goto done;
  check="map deck image";entry=pm_elf_map(pid,image,bytes);if(!entry)goto done;
  check="create payload arguments";intptr_t args=pm_payload_args(pid);if(!args)goto done;
  *control=args+PM_DECK_BOOT_OFFSET;
- PmDeckBoot initial={0};initial.magic=PM_DECK_BOOT_MAGIC;initial.version=PM_DECK_BOOT_VERSION;memcpy(initial.credential,credential,33);
  check="initialize bootstrap record";if(pt_copyin(pid,&initial,*control,sizeof initial))goto done;
  check="resolve pthread_create";intptr_t create=kernel_dynlib_dlsym(pid,0x1,"pthread_create");if(!create)create=kernel_dynlib_dlsym(pid,0x2001,"pthread_create");
  if(!create)goto done;
@@ -155,7 +193,10 @@ int pm_deck_inject(pid_t pid,const uint8_t* image,size_t bytes,const char creden
     (codeProt&(PROT_READ|PROT_WRITE|PROT_EXEC))!=(PROT_READ|PROT_EXEC))goto done;
  check="create bootstrap thread";if(pm_deck_launch(pid,code,code+sizeof stager-2,(uintptr_t)params,&launch))goto done;
 #ifdef PROSPEROMENU_BOOTSTRAP_TRACE
- check="trace bootstrap first signal";if(trace_bootstrap(pid,*control,&attached))goto done;
+ check="trace bootstrap first signal";capture.control=*control;traceStarted=1;
+ int traceResult=trace_bootstrap(&capture);launch.deliver=capture.observation.deliver;
+ if(capture.haveState){last=capture.state;haveStatus=1;}
+ if(traceResult)goto done;
 #else
  // The new thread can already be inside CRT initialization. Detach directly,
  // matching the working libNineS resident path: do not commandeer the host
@@ -171,11 +212,17 @@ int pm_deck_inject(pid_t pid,const uint8_t* image,size_t bytes,const char creden
   check="bootstrap record identity";if(status.magic!=PM_DECK_BOOT_MAGIC||status.version!=PM_DECK_BOOT_VERSION)goto done;
   if(!haveStatus||status.state!=last.state||status.phase!=last.phase||status.error!=last.error||
      (status.renderPhase&&!last.renderPhase)||(status.inputPhase&&!last.inputPhase)){
-   fprintf(stderr,"ProsperoMenu deck bootstrap: state=%u phase=%u error=%u render=%u input=%u\n",status.state,status.phase,status.error,status.renderPhase,status.inputPhase);fflush(stderr);
+   fprintf(stderr,"ProsperoMenu deck bootstrap: state=%u phase=%u(%s) error=%u render=%u input=%u\n",status.state,status.phase,pm_deck_boot_phase(status.phase),status.error,status.renderPhase,status.inputPhase);fflush(stderr);
   }
   if(status.kernelReadCount&&(!haveStatus||status.kernelReadCount!=last.kernelReadCount||status.reservedTrace!=last.reservedTrace)){
    fprintf(stderr,"ProsperoMenu kernel init: reads=%u readPhase=%u address=0x%llx length=%llu result=%d\n",
     status.kernelReadCount,status.reservedTrace,(unsigned long long)status.kernelReadAddress,(unsigned long long)status.kernelReadLength,status.kernelReadResult);fflush(stderr);
+  }
+  if(status.codeMemory.stage&&(!haveStatus||status.codeMemory.stage!=last.codeMemory.stage||
+     status.codeMemory.error!=last.codeMemory.error||status.state!=last.state)){
+   fprintf(stderr,"RunClock code protection: stage=%u native=%d kernel=%d observed=0x%x errno=%d\n",
+    status.codeMemory.stage,status.codeMemory.nativeResult,status.codeMemory.kernelResult,
+    status.codeMemory.observedProtection,status.codeMemory.error);fflush(stderr);
   }
   last=status;haveStatus=1;
   if(status.state==3){fprintf(stderr,"ProsperoMenu deck bootstrap rejected: check=%s error=%u count=%u\n",pm_deck_prepare_error(status.error),status.error,status.count);goto done;}
@@ -199,26 +246,47 @@ int pm_deck_inject(pid_t pid,const uint8_t* image,size_t bytes,const char creden
   if(status.state==4){fprintf(stderr,"ProsperoMenu dashboard integration: hooks=%u available=%d preparationError=%u\n",status.count,status.count>=5,status.dashboardError);ok=1;break;}check="bootstrap wait";usleep(100000);
  }
 done:
- if(attached){if(pt_detach(pid,launch.deliver))ok=0;else attached=0;}
+ if(attached){
+#ifdef PROSPEROMENU_BOOTSTRAP_TRACE
+  // A failed detach must preserve the pending signal. A failed disarm must
+  // never expose a future, now-untraced checkpoint by blindly detaching.
+  int safeToDetach=!traceStarted||capture.observation.disarmed||!trace_disarm(&capture);
+  if(traceStarted&&safeToDetach)capture.observation.disarmed=1;
+  if(!safeToDetach)ok=0;else
+#endif
+  if(pt_detach(pid,launch.deliver))ok=0;else {attached=0;
+#ifdef PROSPEROMENU_BOOTSTRAP_TRACE
+   if(traceStarted)capture.observation.detached=1;
+#endif
+  }
+ }
  if(detach(&context))ok=0;
  *resumed=!attached&&!context.attached;
  // Filesystem logging only after both trace owners confirmed detach.
  if(*resumed){fprintf(stderr,"ProsperoMenu launch stop: caller=%d thread=%d signal=%d rip=0x%llx restored=%d\n",launch.caller,launch.stoppedThread,launch.signal,(unsigned long long)launch.stoppedRip,launch.restored);
 #ifdef PROSPEROMENU_BOOTSTRAP_TRACE
+ if(traceStarted)log_bootstrap_capture(&capture);
  uint64_t imageEntry=0;if(bytes>=32)memcpy(&imageEntry,image+24,sizeof imageEntry);
  fprintf(stderr,"ProsperoMenu diagnostic deck mapping: pid=%d entry=0x%llx imageEntry=0x%llx loadBias=0x%llx control=0x%llx\n",(int)pid,
   (unsigned long long)entry,(unsigned long long)imageEntry,(unsigned long long)((uint64_t)entry-imageEntry),(unsigned long long)*control);
 #endif
- fprintf(stderr,"ProsperoMenu deck injection: check=%s ok=%d observed=%d state=%u phase=%u error=%u render=%u input=%u\n",check,ok,haveStatus,last.state,last.phase,last.error,last.renderPhase,last.inputPhase);fflush(stderr);}
+ fprintf(stderr,"ProsperoMenu deck injection: check=%s ok=%d observed=%d state=%u phase=%u(%s) error=%u render=%u input=%u\n",check,ok,haveStatus,last.state,last.phase,pm_deck_boot_phase(last.phase),last.error,last.renderPhase,last.inputPhase);fflush(stderr);}
  // The console cannot show this, and stderr goes nowhere the owner can read:
  // write the outcome to a small file on the data folder, readable over FTP.
- {
+ if(*resumed){
   FILE* outcome=fopen("/data/RunClock/runtime/deck-status.txt","w");
   if(outcome){
-   fprintf(outcome,"deck injection check=%s ok=%d observed=%d state=%u phase=%u error=%u(%s) render=%u input=%u hooks=%u\n",
-    check,ok,haveStatus,haveStatus?last.state:0,haveStatus?last.phase:0,haveStatus?last.error:0,
+   fprintf(outcome,"deck injection check=%s ok=%d observed=%d state=%u phase=%u(%s) error=%u(%s) render=%u input=%u hooks=%u memoryStage=%u native=%d kernel=%d protection=0x%x errno=%d\n",
+    check,ok,haveStatus,haveStatus?last.state:0,haveStatus?last.phase:0,haveStatus?pm_deck_boot_phase(last.phase):"unobserved",haveStatus?last.error:0,
     haveStatus?pm_deck_prepare_error(last.error):"none",haveStatus?last.renderPhase:0,haveStatus?last.inputPhase:0,
-    haveStatus?last.count:0);
+    haveStatus?last.count:0,haveStatus?last.codeMemory.stage:0,
+    haveStatus?last.codeMemory.nativeResult:0,haveStatus?last.codeMemory.kernelResult:0,
+    haveStatus?last.codeMemory.observedProtection:0,haveStatus?last.codeMemory.error:0);
+#ifdef PROSPEROMENU_BOOTSTRAP_TRACE
+   if(traceStarted)fprintf(outcome,"bootstrap trace signal=%d code=%d fault=0x%llx rip=0x%llx checkpoint=%d timeout=%d disarmed=%d detached=%d stackBytes=%zu\n",
+    capture.observation.signal,capture.code,(unsigned long long)capture.fault,(unsigned long long)capture.regs.r_rip,
+    capture.observation.checkpoint,capture.observation.timedOut,capture.observation.disarmed,capture.observation.detached,capture.stackBytes);
+#endif
    fclose(outcome);
   }
  }

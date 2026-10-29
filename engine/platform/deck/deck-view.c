@@ -417,7 +417,11 @@ int pm_deck_view_render(PmDeckView* v,const PmDeckFrame* f,int open,unsigned sel
   if(!ok)return fail_view(v,now);
   if(!scene||klass!=v->containerClass){
    v->sceneStatus=!app?1:!scene?2:3;
-   if(!release_labels(v)||!release_scene(v))return hold_cleanup(v,now);return 0;
+   if(!release_labels(v)||!release_scene(v))return hold_cleanup(v,now);
+   // ShellUI may be between foreground scenes. Retain the opening request
+   // briefly instead of flashing the panel and resetting its input route.
+   if(now>=v->openingAt&&now-v->openingAt<2000)return 2;
+   v->openingAt=0;return 0;
   }
   if(scene!=target(v,v->parentScene)){
    // Pin the replacement across cleanup and the managed calls it can trigger.
@@ -434,7 +438,7 @@ int pm_deck_view_render(PmDeckView* v,const PmDeckFrame* f,int open,unsigned sel
    if(!release_labels(v))return hold_cleanup(v,now);
    // Scene activation can take another UI tick. Do not close the pending menu
    // immediately, otherwise opening would endlessly create and remove it.
-   if(now<v->openingAt||now-v->openingAt>=2000)return fail_view(v,now);
+   if(now<v->openingAt||now-v->openingAt>=2000){v->openingAt=0;return 0;}
    v->sceneStatus=9;return 2;
   }
   if(root!=target(v,v->root)){

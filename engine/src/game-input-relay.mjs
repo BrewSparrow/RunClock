@@ -36,7 +36,12 @@ export class GameInputRelay {
     return Boolean(p && p.key === this.target()?.key && now >= p.at && now - p.at <= 200 &&
       !this.runtime.jobs.running.size && this.native.gameInputExchangePoll(p.serial)?.busy);
   }
-  note(reason) { this.log.push({ at: this.now(), epoch: this.epoch, reason });if (this.log.length > 40) this.log.shift(); }
+  note(reason) {
+    const at=this.now();this.log.push({ at, epoch: this.epoch, reason });if (this.log.length > 40) this.log.shift();
+    if(this.lastLoggedReason!==reason||at-this.lastLoggedAt>=1000){
+      console.log('RunClock input relay: '+reason+' epoch='+this.epoch);this.lastLoggedReason=reason;this.lastLoggedAt=at;
+    }
+  }
   reset(reason = 'unspecified') {
     this.note('reset:' + reason);
     this.epoch = (this.epoch + 1) >>> 0 || 1;this.serial = 0;this.batch = null;this.deadline = 0;this.capture = null;this.owners.clear();

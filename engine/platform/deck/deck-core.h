@@ -72,7 +72,7 @@ enum { PM_DECK_SELECT=1,PM_DECK_NEXT=2,PM_DECK_PREVIOUS=3,PM_DECK_BACK=4,PM_DECK
 enum { PM_LEFT=1,PM_UP=2,PM_RIGHT=4,PM_DOWN=8,PM_TRIANGLE=16,PM_CIRCLE=64,PM_CROSS=128,
  PM_L1=1024,PM_R1=2048,PM_L3=16384,PM_R3=32768 };
 typedef struct {
-  PmDeckFrame frame; uint64_t received,chordAt[8],repeatAt,noticeDeadline; uint32_t previous[8],serial;
+  PmDeckFrame frame; uint64_t received,chordAt[8],chordReleaseAt[8],repeatAt,noticeDeadline; uint32_t previous[8],serial;
   // Absolute index of the focused item (windowStart+selected); survives window
   // refills and list rebuilds that keep the focus inside the current window.
   uint32_t focus;
@@ -94,6 +94,7 @@ void pm_deck_present(PmDeck* deck,uint32_t sequence,int open,unsigned selected);
 // Return 1 when the renderer owns this sample; caller clears all controller
 // fields, including analog values and button edges, before returning it.
 int pm_deck_input(PmDeck* deck,unsigned device,uint32_t buttons,uint64_t now);
+int pm_deck_input_sample(PmDeck*,unsigned,uint32_t,int skipped,uint64_t now);
 int pm_deck_input_at(PmDeck*,unsigned,uint32_t,uint64_t sampleAt,uint64_t now);
 int pm_deck_event(const PmDeck* deck,PmDeckEvent* event);
 void pm_deck_ack(PmDeck* deck,uint32_t serial);

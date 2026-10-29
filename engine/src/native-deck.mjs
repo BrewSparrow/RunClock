@@ -2,6 +2,7 @@
 import { ConsoleDeck } from './deck.mjs';
 import { invariant, PmError } from './errors.mjs';
 import { expiredStartup, sameExpiry } from './boot-recovery.mjs';
+import { RESTART_REQUIRED } from './runclock-startup.mjs';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // The menu no longer starts kstuff itself (users autoload their own copy), and
 // autoloaders commonly start ProsperoMenu before kstuff. Injection requires
@@ -9,7 +10,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 export const KSTUFF_WAIT_MS = 120000;
 export function installConsoleDeck(runtime, native, { delay = sleep, timeout = 30000, kstuffWait = KSTUFF_WAIT_MS, now = Date.now } = {}) {
   runtime.consoleDeck = new ConsoleDeck(runtime); runtime.deckCredential = runtime.id();
-  const prior = runtime.jobs.snapshot().filter(j => j.kind === 'deck.start').at(-1);
+  const prior = runtime.jobs.snapshot().filter(j => j.kind === 'deck.start' &&
+    !['queued', 'held'].includes(j.status) &&
+    (j.status !== 'cancelled' || j.error?.code === 'RESERVATION_RELEASED')).at(-1);
   let request = prior?.id || null, monitor = null, misses = 0;
   function enable(ready) {
     for (const feature of ['deck', 'ip-overlay']) runtime.capability(feature, ready,
@@ -18,12 +21,24 @@ export function installConsoleDeck(runtime, native, { delay = sleep, timeout = 3
     // heartbeat alone cannot establish game-process input isolation.
   }
   enable(false);
+  function ownerState(job,status){
+    if(status?.ownerState)return status.ownerState;
+    if(job?.args?.pid&&job.args.generation&&typeof native.deckOwnerState==='function')
+      return native.deckOwnerState(job.args.pid,job.args.generation);
+    return null;
+  }
   function inspect(requestId = request) {
     if (!requestId) return { absent: true, ready: false };
     const status = native.deckPoll(requestId), job = runtime.jobs.snapshot().find(j => j.id === requestId);
-    if (job && job.session !== runtime.session && expiredStartup(native, job, status)) return { absent: true, ready: false, expired: true };
+    const owner=ownerState(job,status);
+    if (owner === 'ended') return { ...status, absent: true, ready: false, processEnded: true };
+    if (job && job.session !== runtime.session && !owner && expiredStartup(native, job, status)) return { absent: true, ready: false, expired: true };
+    // Ordinary failed jobs were verified to have no side effects. Their native
+    // receipt may have been superseded by a later clean retry. Native start()
+    // independently checks the durable receipt before any new injection.
+    if (!status && job?.status === 'failed') return { absent: true, ready: false };
     if (job && job.session !== runtime.session && !(status?.stage === 4 && status.noSideEffects))
-      return { absent: false, ready: false, reason: 'The earlier coordinator may still own ShellUI hooks in this boot. Restart the console before starting a new deck.' };
+      return { ...status, absent: false, ready: false, restartRequired: true, reason: RESTART_REQUIRED };
     return status ? { ...status, absent: status.stage === 4 && status.noSideEffects } : { ready: false, absent: true };
   }
   function target(input) {
@@ -70,7 +85,10 @@ export function installConsoleDeck(runtime, native, { delay = sleep, timeout = 3
     },
     verify(result, input) { const status = inspect(); return status.ready && status.pid === input.pid && status.generation === input.generation && result.evidence.request === status.request; },
     reconcile(job) {
-      const receipt = native.deckPoll(job.id), expired = expiredStartup(native, job, receipt);if (expired) return expired;
+      const receipt = native.deckPoll(job.id), owner=ownerState(job,receipt);
+      console.log('RunClock deck recovery: ' + JSON.stringify({request:job.id.slice(0,12),job:job.status,stage:receipt?.stage??null,owner:owner||'unavailable',boot:receipt?.boot||job.args?.boot||null,pid:receipt?.pid||job.args?.pid||null,generation:receipt?.generation||job.args?.generation||null}));
+      if (owner === 'ended') return { absent: true, message: 'The recorded ShellUI process ended. Its resident hooks no longer exist.' };
+      const expired = !owner && expiredStartup(native, job, receipt);if (expired) return expired;
       const status = inspect(job.id); if (status.absent) return { absent: true };
       return status.ready && status.pid === job.args.pid && status.generation === job.args.generation ? { completed: true, evidence: status } : null;
     },
@@ -91,7 +109,8 @@ export function installConsoleDeck(runtime, native, { delay = sleep, timeout = 3
       console.log('ProsperoMenu deck: node start requested');
       const current = inspect(); if (current.ready) { enable(true); return current; }
       console.log('ProsperoMenu deck: current state ' + JSON.stringify({ absent: !!current.absent, ready: !!current.ready, reason: current.reason || null, stage: current.stage ?? null }));
-      invariant(current.absent, 'DECK_UNCERTAIN', 'The previous native deck attempt needs inspection.');
+      invariant(current.absent, current.restartRequired ? 'DECK_RESTART_REQUIRED' : 'DECK_UNCERTAIN',
+        current.reason || 'The previous native deck attempt needs inspection.');
       if (!kstuffReady()) {
         console.log('ProsperoMenu deck: waiting for kstuff from the autoloader');
         const until = now() + kstuffWait;
@@ -108,12 +127,11 @@ export function installConsoleDeck(runtime, native, { delay = sleep, timeout = 3
           console.log('ProsperoMenu deck: ' + error.code + ' before injection; checking again');
         }
       }
-      // A bootstrap rejected before publishing hooks is recorded as a clean
-      // rejection: one retry is safe and absorbs the kernel-hook readiness race
-      // (the arena mprotect flakily fails on some boots). Published hooks or an
-      // uncertain attempt are never retried.
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const job = await runtime.jobs.enqueue('deck.start', {}, 'deck_' + (runtime.recovery?.attempt || runtime.session) + (attempt ? '_r' + attempt : ''));
+      // Exactly one native preparation per launch. Even a rejection before
+      // hooks can retain SDK/Mono state; another injected image is not a
+      // readiness probe. Pre-injection target checks above remain retryable.
+      {
+        const job = await runtime.jobs.enqueue('deck.start', {}, 'deck_' + (runtime.recovery?.attempt || runtime.session));
         console.log('ProsperoMenu deck: job enqueued ' + job.id.slice(0, 12));
         let ended = null;
         while (!signal.aborted) {
@@ -124,12 +142,6 @@ export function installConsoleDeck(runtime, native, { delay = sleep, timeout = 3
         }
         if (!ended) throw new PmError('DECK_WAIT_EXPIRED', 'Deck startup remains recorded in Activity.');
         console.log('ProsperoMenu deck: job ended ' + ended.status + ' ' + (ended.error?.code || '') + ' ' + (ended.error?.message || ''));
-        const cleanRejection = ended.error?.code === 'DECK_REJECTED' || ended.error?.noSideEffects;
-        if (cleanRejection && attempt < 2) {
-          console.log('ProsperoMenu deck: clean early rejection; retrying (' + (attempt + 1) + '/2)');
-          await delay(750);
-          continue;
-        }
         for (const feature of ['deck', 'ip-overlay']) runtime.capability(feature, false, ended.error?.message || 'Native renderer startup failed. Review Activity.');
         throw new PmError(ended.error?.code || 'DECK_STOPPED', ended.error?.message || 'Native deck startup needs inspection.');
       }

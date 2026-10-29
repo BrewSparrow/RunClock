@@ -14,6 +14,7 @@ import {installGameLifecycle} from '../src/game-lifecycle.mjs';
 import {installGameInput} from '../src/game-input.mjs';
 import {installGameInputRelay} from '../src/game-input-relay.mjs';
 import {serveRunClock} from '../src/runclock-server.mjs';
+import {recoverRunClockStartup,startupFailure} from '../src/runclock-startup.mjs';
 import seeds from '../build/overlay-seeds.json';
 import brand from '../build/brand.json';
 const ROOT='/data/RunClock/runtime';
@@ -42,6 +43,7 @@ globalThis.__ready=(async()=>{
    installGameLifecycle(r,__native);installGameInput(r,__native,{automatic:true});installGameInputRelay(r,__native);
   }
  },{id}).start();
+ await recoverRunClockStartup(runtime,__native);
  await serveRunClock(runtime);
  await runtime.graph.start('native-deck');runtime.nativeDeck.startMonitoring();
  await runtime.overlays.host.open(runtime.overlays.registry.get('runclock'));
@@ -51,6 +53,6 @@ globalThis.__ready=(async()=>{
   await new Promise(resolve=>setTimeout(resolve,100));
  }
  runtime.gameLifecycle.start();runtime.gameInput.start();runtime.gameInputRelay.start();
- __native.notify('RunClock v1.0.0-beta.1 by BrewSparrow ready. Hold L3 + R3 to open.');
+ __native.notify('RunClock v1.0.2-beta.3 by BrewSparrow ready. Hold L3 + R3 to open.');
  globalThis.__runclock=runtime;
-})().catch(e=>{console.log('RunClock startup failed: '+String(e.stack||e.message));__native.notify('RunClock could not start. Read /data/RunClock/runtime/runtime.log.');__native.stop();});
+})().catch(e=>{const failure=startupFailure(e);console.log(failure.log);__native.notify(failure.notification);__native.stop();});

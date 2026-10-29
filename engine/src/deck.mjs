@@ -19,7 +19,7 @@ export class ConsoleDeck {
     const all=page?pageRows(page):[{label:'Starting RunClock',detail:session?.message||'Preparing the private timing worker.',enabled:false}];
     this.offset=Math.min(this.offset,Math.max(0,all.length-32));
     const selected=all.slice(this.offset,this.offset+32).map(r=>({...r,triangle:r.enabled&&/^p\d+:(delete|delete-confirm)$/.test(r.args?.id||'')}));
-    const base={title:page?.title||'RunClock v1.0.0-beta.1',subtitle:page?.subtitle||'BrewSparrow',footer:page?.footer||'Hold L3 + R3 to show/hide',rows:selected};
+    const base={title:page?.title||'RunClock v1.0.2-beta.3',subtitle:page?.subtitle||'BrewSparrow',footer:page?.footer||'Hold L3 + R3 to show/hide',rows:selected};
     const controls=JSON.stringify([session?.token||'',this.offset,{...base,rows:selected.map(r=>r.enabled?r:{...r,value:null})}]);
     if(controls!==this.actionKey){this.actionKey=controls;this.sequence=bump(this.sequence);this.tokens=selected.map(()=>this.runtime.id());}
     const display=JSON.stringify(base);

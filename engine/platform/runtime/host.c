@@ -2,6 +2,7 @@
 // Adapted from PS Neighborhood platform plumbing; see vendor/runtime-provenance.json.
 #include "quickjs.h"
 #include "loader-worker.h"
+#include "runtime-log.h"
 extern void pm_loader_bind(JSContext*,JSValue);
 extern void pm_system_bind(JSContext*,JSValue);
 extern void pm_deck_bind(JSContext*,JSValue);
@@ -214,7 +215,9 @@ int main(int argc,char **argv){(void)argc;(void)argv;signal(SIGPIPE,SIG_IGN);mkd
  if(flock(lock,LOCK_EX|LOCK_NB)){char address[512],message[256];snprintf(message,sizeof message,"RunClock is already running in this boot.",local_ip(address));notify_user(message);close(lock);return 1;}
 
 #ifdef __PS5__
+ int logRotation=pm_runtime_rotate_logs(ROOT);
  FILE *runtimeLog=freopen(ROOT "/runtime.log","w",stderr);if(runtimeLog)setvbuf(runtimeLog,NULL,_IOLBF,0);
+ if(logRotation)fprintf(stderr,"RunClock: previous runtime log rotation failed (errno %d)\n",logRotation);
  fault_trace_init();
  fprintf(stderr,"ProsperoMenu diagnostic identity: source=%s firmware=0x%08x\n",PROSPEROMENU_SOURCE_HASH,kernel_get_fw_version());
 #ifdef PROSPEROMENU_BOOTSTRAP_TRACE

@@ -3,6 +3,7 @@
 #include <string.h>
 static void reset(PmDeck *d){
  memset(d->previous,0,sizeof d->previous);memset(d->chordAt,0,sizeof d->chordAt);
+ memset(d->chordReleaseAt,0,sizeof d->chordReleaseAt);
  memset(d->chordActive,0,sizeof d->chordActive);memset(d->chordLatched,0,sizeof d->chordLatched);memset(d->drain,0,sizeof d->drain);
  d->open=d->pending=d->owner=d->presentedOpen=0;d->repeatAt=d->repeatDirection=0;
 }
@@ -14,7 +15,7 @@ static uint32_t buttons(uint32_t raw){
 void pm_deck_route_focus(PmDeckInput* input,int gameFocused){
  // A failed game bridge is not evidence that ShellUI lost controller focus.
  // Only a verified foreground observation may override that bridge's route.
- if(gameFocused==-2)return;
+ if(gameFocused!=0&&gameFocused!=1)return;
  if(gameFocused==1&&input->active==1)return;
  input->active=gameFocused==0?0:2;
  input->captured=0;input->captureAt=0;input->owner=-1;
@@ -49,11 +50,11 @@ void pm_deck_route_receive(PmDeck *d,PmDeckRoute *r,const PmDeckInput *input,uin
   for(unsigned j=0;j<8;j++)if(r->controllers[j].used&&r->controllers[j].handle==p->handle){slot=(int)j;break;}
   if(slot>=0&&r->controllers[slot].connection!=p->connection){
    if(d->open&&d->owner==slot){reset(d);r->captured=0;}
-   r->controllers[slot]=(PmDeckController){p->handle,p->connection,1,0};d->previous[slot]=d->chordActive[slot]=d->chordLatched[slot]=d->drain[slot]=0;
+   r->controllers[slot]=(PmDeckController){p->handle,p->connection,1,0};d->previous[slot]=d->chordActive[slot]=d->chordLatched[slot]=d->drain[slot]=0;d->chordReleaseAt[slot]=0;
   }
   if(slot<0)for(unsigned j=0;j<8;j++)if(!r->controllers[j].used||
     ((!d->open||d->owner!=j)&&now>r->controllers[j].at&&now-r->controllers[j].at>2000)){
-    slot=(int)j;r->controllers[j]=(PmDeckController){p->handle,p->connection,1,0};d->previous[j]=d->chordActive[j]=d->chordLatched[j]=d->drain[j]=0;break;
+    slot=(int)j;r->controllers[j]=(PmDeckController){p->handle,p->connection,1,0};d->previous[j]=d->chordActive[j]=d->chordLatched[j]=d->drain[j]=0;d->chordReleaseAt[j]=0;break;
   }
   if(slot<0||p->at<r->controllers[slot].at)continue;r->controllers[slot].at=p->at;
   if(d->open&&d->owner!=slot)continue;

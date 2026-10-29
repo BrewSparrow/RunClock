@@ -2,6 +2,7 @@
 #include "quickjs.h"
 #include "deck-inject.h"
 #include "deck-bootstrap.h"
+#include "deck-receipt.h"
 #include "native-operation.h"
 #include "kstuff-probe.h"
 #include "elf-image.h"
@@ -52,18 +53,24 @@ static int transition(Receipt* r,unsigned stage,int clean,const char* message){
  r->stage=stage;r->clean=clean;snprintf(r->message,sizeof r->message,"%s",message);int result=save(r);
  pthread_mutex_lock(&mutex);current=*r;pthread_mutex_unlock(&mutex);return result;
 }
-static int identity(Receipt* r){
+// 1: the recorded process still exists; 0: it demonstrably ended; -1:
+// inspection failed. A reused boot timestamp must not reserve an old ShellUI
+// forever, and a failed query must never be mistaken for a process exit.
+static int owner_state(Receipt* r){
  struct timeval boot;size_t size=sizeof boot;int bm[]={CTL_KERN,KERN_BOOTTIME};
- if(sysctl(bm,2,&boot,&size,NULL,0)||size!=sizeof boot)return 0;
+ if(sysctl(bm,2,&boot,&size,NULL,0)||size!=sizeof boot)return -1;
  if(r->bootSec!=boot.tv_sec||r->bootUsec!=boot.tv_usec)return 0;
  struct kinfo_proc info={0};
  if(pm_process_info(r->pid,&info)){
-  int error=errno;fprintf(stderr,"ProsperoMenu deck identity: process record read failed pid=%d errno=%d\n",r->pid,error);errno=error;return 0;
+  int error=errno;fprintf(stderr,"RunClock deck owner: process read failed pid=%d errno=%d\n",r->pid,error);errno=error;
+  return error==ESRCH?0:-1;
  }
- info.ki_comm[COMMLEN]=0;if(strcmp(info.ki_comm,"SceShellUI")||info.ki_start.tv_sec<=0||info.ki_start.tv_usec<0||info.ki_start.tv_usec>=1000000)return 0;
+ info.ki_comm[COMMLEN]=0;if(strcmp(info.ki_comm,"SceShellUI"))return 0;
+ if(info.ki_start.tv_sec<=0||info.ki_start.tv_usec<0||info.ki_start.tv_usec>=1000000)return -1;
  char generation[128];snprintf(generation,sizeof generation,"%lld:%lld/%d/%lld:%lld",(long long)boot.tv_sec,(long long)boot.tv_usec,r->pid,(long long)info.ki_start.tv_sec,(long long)info.ki_start.tv_usec);
  return !strcmp(generation,r->generation);
 }
+static int identity(Receipt* r){return owner_state(r)==1;}
 static int verify_identity(void* receipt){return identity(receipt);}
 static void* worker(void* ignored){
  (void)ignored;Receipt r;char credential[33];pthread_mutex_lock(&mutex);r=current;memcpy(credential,secret,33);pthread_mutex_unlock(&mutex);
@@ -84,14 +91,13 @@ static void* worker(void* ignored){
   r.stage=5;r.clean=0;snprintf(r.message,sizeof r.message,"ShellUI resume is unconfirmed; original deck intent retained");
   pthread_mutex_lock(&mutex);current=r;pthread_mutex_unlock(&mutex);
  }else if(injected){
-  // A bootstrap rejected before any hook publication (state 3, count 0) leaves
-  // ShellUI pristine. Record a clean rejection, which the next attempt may take;
-  // only published hooks make a second attempt in this boot unsafe.
+  // A resident image has already initialized SDK/Mono state even if it has
+  // published no hooks. Retain that ownership; no same-process reinjection.
   PmDeckBoot seen={0};
   if(r.control&&!kernel_proc_copyout(r.pid,r.control,&seen,sizeof seen)&&
      seen.magic==PM_DECK_BOOT_MAGIC&&seen.version==PM_DECK_BOOT_VERSION&&
      seen.state==3&&seen.count==0)
-   transition(&r,4,1,"Deck bootstrap rejected before any hooks were published; a retry is safe");
+   transition(&r,5,0,"RunClock preparation stopped before menu hooks. Its resident image is retained; restart the PS5 before another attempt.");
   else
    transition(&r,5,0,"Deck initialization or hook publication was not confirmed; no reinjection was issued");
  }
@@ -111,6 +117,9 @@ static int start(const char* request,int pid,const char* generation,const char* 
  struct timeval boot;size_t size=sizeof boot;int mib[]={CTL_KERN,KERN_BOOTTIME};
  start_check="boot identity";
  if(sysctl(mib,2,&boot,&size,NULL,0)||size!=sizeof boot){pthread_mutex_unlock(&mutex);return -1;}r.bootSec=boot.tv_sec;r.bootUsec=boot.tv_usec;
+ start_check="ShellUI identity";
+ if(!identity(&r)){int e=errno;pthread_mutex_unlock(&mutex);errno=e?e:ESRCH;return -1;}
+ fprintf(stderr,"RunClock startup target: pid=%d generation=%s\n",r.pid,r.generation);fflush(stderr);
  Receipt prior;
  start_check="previous deck receipt";
  if(!load(&prior)){
@@ -118,12 +127,12 @@ static int start(const char* request,int pid,const char* generation,const char* 
    int same=prior.pid==r.pid&&!strcmp(prior.generation,r.generation)&&prior.bootSec==r.bootSec&&prior.bootUsec==r.bootUsec;
    if(same)current=prior;pthread_mutex_unlock(&mutex);if(same)return 0;errno=EINVAL;return -1;
   }
-  if(prior.bootSec==r.bootSec&&prior.bootUsec==r.bootUsec&&!(prior.stage==4&&prior.clean)){
+  int owner=owner_state(&prior);
+  fprintf(stderr,"RunClock previous deck: stage=%u clean=%u pid=%d owner=%s oldBoot=%lld:%lld currentBoot=%lld:%lld\n",prior.stage,prior.clean,prior.pid,owner==1?"current":owner==0?"ended":"unknown",(long long)prior.bootSec,(long long)prior.bootUsec,(long long)r.bootSec,(long long)r.bootUsec);
+  if(pm_deck_receipt_blocks(prior.stage,prior.clean,0,owner)){
    pthread_mutex_unlock(&mutex);errno=EALREADY;return -1;
   }
  }else if(errno!=ENOENT){pthread_mutex_unlock(&mutex);return -1;}
- start_check="ShellUI identity";
- if(!identity(&r)){int e=errno;pthread_mutex_unlock(&mutex);errno=e?e:ESRCH;return -1;}
  start_check="save deck intent";
  if(save(&r)){int e=errno;pthread_mutex_unlock(&mutex);errno=e;return -1;}
  start_check="claim native operation";
@@ -153,11 +162,14 @@ static JSValue poll_js(JSContext* c,JSValueConst self,int argc,JSValueConst* arg
  Receipt r;pthread_mutex_lock(&mutex);int live=running,found=current.magic==MAGIC&&!strcmp(current.request,request);if(found)r=current;pthread_mutex_unlock(&mutex);
  if(!found&&(load(&r)||strcmp(r.request,request))){JS_FreeCString(c,request);return JS_NULL;}JS_FreeCString(c,request);
  int ready=0,traced=0;PmDeckBoot status;uint64_t now=0; // ProsperoMenu: traced/status/now feed the debug trace below
- if(!live&&(r.stage==1||r.stage==2))r.stage=5;
+ if(!live&&r.stage==1&&pm_deck_receipt_clean(r.stage,r.clean,live)){
+  r.stage=4;snprintf(r.message,sizeof r.message,"The earlier startup ended before injection began");
+ }else if(!live&&(r.stage==1||r.stage==2))r.stage=5;
  // Sample "busy" once: a poll skipped because another native operation was
  // running must report busy, or the caller reads it as a lost renderer.
  const int busy=pm_native_busy();
- if(!busy&&r.stage==3&&r.control&&identity(&r)){
+ const int owner=owner_state(&r);
+ if(!busy&&r.stage==3&&r.control&&owner==1){
   fprintf(stderr,"ProsperoMenu deck poll: stage=%d control=%llu busy=%d\n",r.stage,(unsigned long long)r.control,busy);fflush(stderr);
   if(!kernel_proc_copyout(r.pid,r.control,&status,sizeof status)&&status.magic==PM_DECK_BOOT_MAGIC&&status.version==PM_DECK_BOOT_VERSION&&status.state==4){
    traced=1;
@@ -191,6 +203,7 @@ static JSValue poll_js(JSContext* c,JSValueConst self,int argc,JSValueConst* arg
   }
  }
  JSValue out=JS_NewObject(c);JS_SetPropertyStr(c,out,"request",JS_NewString(c,r.request));JS_SetPropertyStr(c,out,"stage",JS_NewInt32(c,r.stage));
+ JS_SetPropertyStr(c,out,"ownerState",JS_NewString(c,owner==1?"current":owner==0?"ended":"unknown"));
  char boot[80];snprintf(boot,sizeof boot,"%lld:%lld",(long long)r.bootSec,(long long)r.bootUsec);JS_SetPropertyStr(c,out,"boot",JS_NewString(c,boot));
  JS_SetPropertyStr(c,out,"busy",JS_NewBool(c,busy));
  JS_SetPropertyStr(c,out,"pid",JS_NewInt32(c,r.pid));JS_SetPropertyStr(c,out,"generation",JS_NewString(c,r.generation));
@@ -211,4 +224,24 @@ static JSValue poll_js(JSContext* c,JSValueConst self,int argc,JSValueConst* arg
  }
  return out;
 }
-void pm_deck_bind(JSContext* c,JSValue api){JS_SetPropertyStr(c,api,"deckStart",JS_NewCFunction(c,start_js,"deckStart",4));JS_SetPropertyStr(c,api,"deckPoll",JS_NewCFunction(c,poll_js,"deckPoll",1));}
+static JSValue owner_js(JSContext* c,JSValueConst self,int argc,JSValueConst* argv){
+ (void)self;Receipt r={0};int32_t pid=0;const char* generation=NULL;int state=-1;
+ if(argc!=2)return JS_ThrowTypeError(c,"Expected ShellUI PID and generation");
+ generation=JS_ToCString(c,argv[1]);if(!generation)return JS_EXCEPTION;
+ if(JS_ToInt32(c,&pid,argv[0])){JS_FreeCString(c,generation);return JS_EXCEPTION;}
+ long long bs=0,bu=0,ss=0,su=0;int gp=0;char extra=0,canonical[128];
+ if(pid>1&&strlen(generation)<sizeof r.generation&&
+    sscanf(generation,"%lld:%lld/%d/%lld:%lld%c",&bs,&bu,&gp,&ss,&su,&extra)==5&&
+    gp==pid&&bs>=0&&bu>=0&&bu<1000000&&ss>0&&su>=0&&su<1000000){
+  snprintf(canonical,sizeof canonical,"%lld:%lld/%d/%lld:%lld",bs,bu,gp,ss,su);
+  if(!strcmp(canonical,generation)){
+   r.pid=pid;r.bootSec=bs;r.bootUsec=bu;strcpy(r.generation,generation);state=owner_state(&r);
+  }
+ }
+ JS_FreeCString(c,generation);return JS_NewString(c,state==1?"current":state==0?"ended":"unknown");
+}
+void pm_deck_bind(JSContext* c,JSValue api){
+ JS_SetPropertyStr(c,api,"deckStart",JS_NewCFunction(c,start_js,"deckStart",4));
+ JS_SetPropertyStr(c,api,"deckPoll",JS_NewCFunction(c,poll_js,"deckPoll",1));
+ JS_SetPropertyStr(c,api,"deckOwnerState",JS_NewCFunction(c,owner_js,"deckOwnerState",2));
+}

@@ -1,152 +1,20 @@
 {
-  "project": "RunClock",
+  "name": "RunClock",
   "version": "1.0.2-beta.3",
-  "build_revision": "v1.0.2-beta.3-release",
+  "tag": "v1.0.2-beta.3",
+  "kind": "standalone-elf",
+  "requires_prosperomenu": false,
+  "target_firmware": "13.60",
+  "physical_console_tested": false,
+  "verification_source": "Derived from startup test 6, which the maintainer reports passed five consecutive alternating restart/shutdown launches. Version/UI/packaging rebuild; exact versioned ELF retest pending. Startup observer retained.",
+  "prerelease": true,
+  "default_splits": 10,
+  "live_clocks": true,
+  "native_kernel_support": "compatible kstuff injection readiness",
   "author": "BrewSparrow",
-  "physical_console_tested": true,
-  "result": "versioned_release_cross_compiled_host_tested_tested_baseline_retained",
-  "change_scope": "Version/UI/ready-notification/banner labels and release packaging; startup observer and resident renderer/input module retained from test 6.",
-  "firmware": "13.60",
-  "loader": "Payload Manager",
-  "elf_bytes": 10633792,
-  "elf_sha256": "07f91df7252ccc31575cab00a0381e335f813ef56ff3867d16ada6230217934e",
-  "known_issues": [
-    {
-      "id": "capture-overlay",
-      "status": "reported",
-      "description": "RunClock absent from PS5 built-in gameplay recordings."
-    },
-    {
-      "id": "capture-controls",
-      "status": "reported_before_restart_not_retested_after",
-      "description": "Capture controls reported unresponsive with panel open; current input filters suppress buttons."
-    },
-    {
-      "id": "triangle-in-game",
-      "status": "source_inspection",
-      "description": "Raw game-input route does not map Triangle; use Delete attempt / Confirm delete menu controls."
-    },
-    {
-      "id": "intermittent-startup-freeze",
-      "status": "improved_in_five_maintainer_baseline_tests",
-      "description": "Test-6 baseline passed five consecutive alternating restart/shutdown launches. Its observer and resident module are retained; exact beta-3 ELF retest and broader compatibility remain pending."
-    },
-    {
-      "id": "menu-closes-on-open",
-      "status": "input_corrections_retained",
-      "description": "Held/skipped/chattering chord handling and pending-scene/focus corrections retained. Startup test report does not separately certify every in-game input route."
-    }
-  ],
-  "host_regression_checks_last_run": "2026-10-28",
-  "host_regression_checks": "passed",
-  "ps5_cross_compile": "passed",
-  "timing_storage_logic_unchanged": true,
-  "startup_recovery_changed": false,
-  "timing_worker_binary_unchanged": false,
-  "renderer_changed": true,
-  "other_embedded_helpers_unchanged": true,
-  "automated_scope_excludes": [
-    "actual PS5 injection and ShellUI composition",
-    "full raw in-game controller relay",
-    "screenshot and video capture",
-    "hardware timing latency"
-  ],
-  "native_memory_regression": "Old code fails neighbor-protection check; correction passes, including isolation/protection error paths.",
-  "resident_sdk": {
-    "source": "bundled SDK v0.43",
-    "fresh_coordinator_iommu_handoff": true,
-    "resident_iommu_scan": false,
-    "early_failure": "thread-only rejection",
-    "bootstrap_abi": 16,
-    "syscall_stack_abi_verified": true,
-    "preparation": {
-      "sdk_archive_sha256": "f6b427ce23c56437cb9201685e72d83e88c67e13ae178e61b12fcf8274a44f7d",
-      "resident_only": true,
-      "iommu_scan": false,
-      "syscall_bridge_naked": true,
-      "libc_thread_flag_phase_markers": true,
-      "sources": [
-        "crt.c",
-        "syscall.c",
-        "klog.c",
-        "nid.c",
-        "kernel.c",
-        "rtld.c",
-        "rtld_so.c",
-        "rtld_sprx.c",
-        "rtld_payload.c",
-        "rtld_dlfcn.c",
-        "mdbg.c",
-        "patch.c",
-        "kernel_procio.c",
-        "kernel_iommu.c",
-        "_start.S"
-      ],
-      "kernel_source_sha256": "a2157fc01111ecdca3d363a4ff1120a5adbc6e9a73685d695b891cd6cc6cbaca",
-      "syscall_source_sha256": "2fd995c582e48be347e834778dfa2ecc7fb762fd1cf744488f70647100b068f7",
-      "crt_source_sha256": "c5c43733cfb13441e41c09f0ba79ff14f1907727fc08e42578ce735c755e733c"
-    }
-  },
-  "native_sdk_regression": "Real validator and early failure wrapper passed; transformed SDK initializer passed. The actual bridge compiled with resident target/options fails with the old prologue and passes with the naked correction. Linked and embedded bridge instruction guards passed.",
-  "resident_hooks": {
-    "count": 2,
-    "features": [
-      "render",
-      "input"
-    ],
-    "automatic_reinjection": false,
-    "preparation_failure": "retain module and require restart"
-  },
-  "startup_rejection_regression": "Real graph/job tests issue one native start after clean or retained rejection; no automatic reinjection. Resident main is non-returning, and removed optional hook modules are absent from the linked renderer.",
-  "protection_diagnostics_regression": "Native isolation failure, SDK sealing failure and mismatched observed protection produce distinct checked trace stages/results.",
-  "startup_diagnostic": {
-    "enabled": true,
-    "scope": "first signal through preparation, before publication",
-    "checkpoint_phase": 23,
-    "real_signals_preserved": true,
-    "disarm_before_detach": true,
-    "stack_capture_max_bytes": 8192
-  },
-  "startup_observer_regression": "Production observer lifecycle tests and the actual x86 checkpoint passed: disarm-before-detach, faults, unknown traps, timeout races and retained detach signal.",
-  "host_test_limitation": "Host operations are substituted and do not emulate PS5 ptrace/Mono behavior. The complete beta-3 suite passed; an earlier test-6 integration run rejected a stale action before its successful reruns.",
-  "timing_worker_change": "RC_VERSION display string only; timer/storage/control logic unchanged.",
-  "renderer_runtime_changed": false,
-  "functional_baseline": {
-    "build_revision": "startup-fault-diagnostic-test-6",
-    "elf_sha256": "702d02eeb7729d4838e4afea64dfa95bced95ec396d8bd8118f64eb4e6097340",
-    "maintainer_report": "Five consecutive successful launches alternating Restart and complete Shutdown/reboot on PS5 13.60.",
-    "startup_attempts": 5,
-    "startup_failures": 0,
-    "observer_enabled": true,
-    "versioned_elf_retest_pending": true
-  },
-  "resident_baseline_comparison": {
-    "runtime_allocated_sections_identical": true,
-    "baseline_sha256": "d5818992471792fe3e4a339574587c7a44f4ac93091bcce2510d418a4ad702a2",
-    "release_sha256": "c85fff10334220c90952491dca077f25d9174bd7dffb9b37e64c7a81ff83d731",
-    "different_non_runtime_sections": [
-      ".debug_info",
-      ".debug_str"
-    ],
-    "explanation": "Only debugger metadata containing the build directory differs; executable code and allocated data match."
-  },
-  "maintainer_console_report": {
-    "baseline_version": "1.0.1-beta.2",
-    "baseline_revision": "startup-fault-diagnostic-test-6",
-    "baseline_elf_sha256": "702d02eeb7729d4838e4afea64dfa95bced95ec396d8bd8118f64eb4e6097340",
-    "baseline_source": "20c2b94645b71ab8a492e662adee2c21395effa397db2f75e827f262df06dff7",
-    "firmware": "13.60",
-    "sequence": [
-      "Y2JB Autoloader",
-      "Payload Manager",
-      "kstuff lite",
-      "elfldr",
-      "RunClock"
-    ],
-    "attempts": 5,
-    "failures": 0,
-    "power_cycles": "Alternating Restart and complete Shutdown/reboot",
-    "evidence": "Maintainer report; no new runtime logs supplied.",
-    "exact_versioned_elf_console_verified": false
-  }
+  "display_title": "RunClock v1.0.2-beta.3",
+  "release_stage": "beta-prerelease",
+  "built_in_recording_includes_overlay": false,
+  "capture_work_deferred": true,
+  "build_revision": "v1.0.2-beta.3-release"
 }

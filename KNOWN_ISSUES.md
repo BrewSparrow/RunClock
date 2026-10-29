@@ -1,6 +1,6 @@
-# Known issues — v1.0.0-beta.1
+# Known issues — v1.0.2-beta.3
 
-This beta preserves the tested ELF. Screen capture changes are deferred.
+This release retains the startup observer from test 6, which the maintainer reports passed five consecutive alternating Restart and complete Shutdown/reboot launches on PS5 13.60. Earlier builds crashed intermittently. Five successful tests establish progress on that setup, not universal compatibility or a proven sole root cause. The new version-label rebuild has a separate ELF hash; exact-artifact console verification is still pending. See CONSOLE_TEST.md and VALIDATION.md. Screen capture work remains deferred.
 
 ## Built-in recording and screenshot controls
 
@@ -12,15 +12,17 @@ This release does not claim screenshot or recording support for the overlay. A f
 
 ## Triangle shortcut during a game
 
-Source inspection shows that the current raw game-input mapping does not forward Triangle. **Use Records → attempt → Delete attempt → Confirm delete during a game.** Double-Triangle deletion is available when using the home-screen input path. The release does not change the tested controller code.
+Source inspection shows that the current raw game-input mapping does not forward Triangle. **Use Records → attempt → Delete attempt → Confirm delete during a game.** Double-Triangle deletion is available when using the home-screen input path. The Triangle mapping is unchanged.
 
 ## Opening the panel
 
 The maintainer confirmed that restarting the PS5 restored opening RunClock while a game was running. Load RunClock once per boot. Reboot before switching builds or changing system-interface overlay payloads. Simultaneous ShellUI overlays are unverified.
 
+An earlier coordinator may leave native hooks resident after its process exits. This build automatically reconciles startup reservations only when native checks verify that the old boot or game ended, or that injection never began. A genuinely uncertain same-boot renderer still requires a full restart; deleting saved data is not a remedy.
+
 ## Other limits
 
-- Firmware 13.60 through Payload Manager is the tested setup. Existing compatible kstuff injection support is required.
+- Firmware 13.60 through Payload Manager is the tested setup. Both kstuff and elfldr must be loaded before RunClock, with compatible injection support.
 - Saved records persist, but active attempts do not recover after crash, rest mode, or reboot.
 - No always-visible gameplay timer HUD, automatic load removal, autosplitting, or global split shortcut is included.
 - Physical controller-to-timer latency has not been measured; displayed precision does not certify competitive timing accuracy.

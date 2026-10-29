@@ -191,8 +191,14 @@ int pm_deck_input_at(PmDeck* d,unsigned device,uint32_t buttons,uint64_t now,uin
  if(device>=8||now>receivedNow||receivedNow-now>400)return 0;pm_deck_tick(d,receivedNow);
  uint32_t pressed=buttons&~d->previous[device];d->previous[device]=buttons;
  const uint32_t chord=PM_L3|PM_R3;
- if((buttons&chord)!=chord){d->chordActive[device]=0;d->chordLatched[device]=0;}
- else if(!d->chordLatched[device]&&(!d->open||d->owner==device)){
+ if((buttons&chord)!=chord)d->chordActive[device]=0;
+ // Re-arm only after BOTH sticks have remained released. Partial release or
+ // a brief neutral/cached sample while holding cannot toggle the menu twice.
+ if(!(buttons&chord)){
+  if(!d->chordReleaseAt[device])d->chordReleaseAt[device]=now;
+  if(now>=d->chordReleaseAt[device]&&now-d->chordReleaseAt[device]>=100)d->chordLatched[device]=0;
+ }else d->chordReleaseAt[device]=0;
+ if((buttons&chord)==chord&&!d->chordLatched[device]&&(!d->open||d->owner==device)){
   if(!d->chordActive[device]){d->chordActive[device]=1;d->chordAt[device]=now;}
   if(now>=d->chordAt[device]&&now-d->chordAt[device]>=350){
    d->chordLatched[device]=1;
@@ -322,5 +328,10 @@ int pm_deck_input_at(PmDeck* d,unsigned device,uint32_t buttons,uint64_t now,uin
  return 1;
 }
 int pm_deck_input(PmDeck* d,unsigned device,uint32_t buttons,uint64_t now){return pm_deck_input_at(d,device,buttons,now,now);}
+int pm_deck_input_sample(PmDeck* d,unsigned device,uint32_t buttons,int skipped,uint64_t now){
+ // ShellUI's skip flag is "no usable sample", not a physical button release.
+ if(skipped)return device<8&&(d->open||d->drain[device]);
+ return pm_deck_input(d,device,buttons,now);
+}
 int pm_deck_event(const PmDeck* d,PmDeckEvent* event){if(!d->pending)return 0;*event=d->event;return 1;}
 void pm_deck_ack(PmDeck* d,uint32_t serial){if(d->pending&&d->event.serial==serial)d->pending=0;}

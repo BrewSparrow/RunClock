@@ -13,5 +13,9 @@ typedef struct { int ready,visible,close;uint64_t heartbeat; } PmDeckRenderState
 static inline PmDeckRenderState pm_deck_render_state(int result,int open,uint32_t sequence,uint64_t now){
  // A valid closed/detached frame proves the UI callback is alive. Waiting for
  // the menu to be visible would deadlock readiness with its opening command.
- return (PmDeckRenderState){result==1,result==1&&open,result==0,result==1&&sequence?now:0};
+ // A scene awaiting activation (2) is alive. Reporting it unready reset the
+ // game-input epoch just as L3+R3 opened the menu. Actions remain gated by the
+ // separately recorded, actually presented frame in pm_deck_input_at().
+ int alive=result==1||result==2;
+ return (PmDeckRenderState){alive,result==1&&open,result==0,alive&&sequence?now:0};
 }

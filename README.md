@@ -1,12 +1,12 @@
 <p align="center"><img src="assets/runclock-banner.svg" alt="RunClock standalone PS5 speedrun timer" width="960"></p>
 
-# RunClock v1.0.1-beta.2
+# RunClock v1.0.2-beta.3
 
 **By BrewSparrow**
 
 Time your runs, record splits, and save attempts directly on your PS5. RunClock is a standalone **RunClock.elf** payload loaded through **Payload Manager**. It runs entirely on the console and requires no external server, account, PC companion, or ProsperoMenu installation.
 
-**Public beta · Tested on firmware 13.60 · Screen capture support is incomplete.** Read [Known issues](KNOWN_ISSUES.md) before downloading.
+**Beta 3 · RunClock v1.0.2-beta.3.** Based on the startup build that passed five consecutive alternating Restart and full Shutdown/reboot tests on the maintainer's PS5 13.60. The tested startup observer remains enabled. See [Changelog](CHANGELOG.md), [console test history](CONSOLE_TEST.md) and [Known issues](KNOWN_ISSUES.md).
 
 ## Features
 
@@ -20,16 +20,14 @@ Time your runs, record splits, and save attempts directly on your PS5. RunClock 
 
 ## Download and install
 
-Open this repository's **Releases** section and select **v1.0.1-beta.2**. Players need **RunClock.elf**, or the install ZIP containing the same ELF plus instructions and notices.
+Open this repository's **Releases** section and select **v1.0.2-beta.3**. Players need **RunClock.elf**, or the install ZIP containing the same ELF plus instructions and notices.
 
-> **Warning:** Loading **RunClock.elf** without first loading **both kstuff and elfldr** can freeze the console. Both must be loaded before starting RunClock.
-
-1. **Fully restart your PS5 before loading this build.** Load RunClock once per boot. Start with other ShellUI overlays, including ProsperoMenu, disabled for that boot.
-2. Start your usual jailbreak, then ensure **kstuff and elfldr are both loaded and have finished starting** before proceeding.
-3. Load **RunClock.elf** through **Payload Manager**. Wait for the ready notification, then hold **L3 + R3** to open the panel.
+1. **Restart your PS5 before loading this build.** Load RunClock once per boot. Start with other ShellUI overlays, including ProsperoMenu, disabled for that boot.
+2. Start your usual jailbreak and ensure **both kstuff and elfldr are loaded and have finished starting** before loading **RunClock.elf** through Payload Manager. Loading RunClock without them has been reported to freeze the console.
+3. Wait for the ready notification, then hold **L3 + R3** to open the panel.
 4. Select **Start run**. Both clocks update automatically. The panel can be opened from the home screen or during a game on the tested setup.
 
-**Requirements:** a jailbroken PS5 and existing compatible **kstuff injection support**. The tested setup uses firmware **13.60** and Payload Manager. RunClock supplies its own renderer and timing worker. It does not install kernel support or replace another application's ELF. Other firmware and simultaneous system-UI overlays are unverified.
+**Requirements:** a jailbroken PS5 with **kstuff and elfldr loaded before RunClock** and compatible injection support. The tested setup uses firmware **13.60** and Payload Manager. RunClock supplies its own renderer and timing worker. It does not install kernel support or replace another application's ELF. Other firmware and simultaneous system-UI overlays are unverified.
 
 If the panel opens on the home screen but fails to open in a game, restart the console and load RunClock once. This restored in-game opening during the maintainer's testing.
 
@@ -58,7 +56,11 @@ For a custom route, create **`/data/RunClock/route.txt`** with the game title on
 
 ## Beta status
 
-The maintainer tested the standalone timer on a physical PS5 running firmware 13.60 through Payload Manager and confirmed that in-game opening works after restarting. **RunClock is absent from PS5 built-in gameplay recordings.** Capture controls while the panel is open also need further work. Capture changes are deferred beyond this beta.
+The startup build used for this release passed five consecutive maintainer tests, alternating between Restart and a complete Shutdown/reboot. The tested sequence was Y2JB Autoloader → Payload Manager → kstuff lite → elfldr → RunClock on PS5 firmware 13.60. Version 1.0.2-beta.3 retains that startup observer and the existing timer/input behavior; its version labels and release packaging have been rebuilt.
+
+This is still a beta, and the test report applies to that setup and baseline. The versioned ELF is a new artifact; give it a final launch check before publishing or replacing a known working copy. Keep existing data. If startup fails, save runtime.log, deck-status.txt and bootstrap-stack.bin if present from /data/RunClock/runtime/ before retrying. Restart before loading another copy.
+
+**RunClock is absent from PS5 built-in gameplay recordings.** Capture support remains incomplete and deferred.
 
 An active attempt does not recover after a crash, rest mode, or reboot. Saved attempts persist. Automatic load removal, autosplitting, global split shortcuts, and an always-visible gameplay timer HUD are not included. Controller-to-timer latency has not been measured on hardware.
 
@@ -68,4 +70,4 @@ See [Known issues](KNOWN_ISSUES.md), [console test history](CONSOLE_TEST.md), an
 
 RunClock is **GPL-3.0-or-later**. Its rendering/input foundation is adapted from [StonedModder/Prospero-Menu](https://github.com/StonedModder/Prospero-Menu), revision `84dd26cd342a5d9b1df5a93942ca5d7f10c8d39e`. Original copyright and license notices are retained. RunClock runs independently of that application.
 
-Both **RunClock_v1.0.1-beta.2.zip** and **RunClock_Dependency_Source_v1.0.1-beta.2.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and the [GitHub release guide](GITHUB_RELEASE_GUIDE.md).
+Both **RunClock_v1.0.2-beta.3.zip** and **RunClock_Dependency_Source_v1.0.2-beta.3.zip** accompany the binary. See [build instructions](BUILD.md), [third-party notices](THIRD_PARTY.md), and [startup recovery instructions](STARTUP_FIX.md).

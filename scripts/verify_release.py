@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate standalone release assets, encoded worker, archives and hashes."""
 from pathlib import Path,PurePosixPath
+import importlib.util
 import argparse,hashlib,json,re,zipfile,base64
 p=argparse.ArgumentParser();p.add_argument('assets',type=Path);root=p.parse_args().assets.resolve()
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -18,6 +19,12 @@ for item in m['build']['embeddedAssets']:
  start=item['offset'];size=item['bytes']
  assert start>=0 and size>0 and start+size<=len(elf),'Embedded asset bounds'
  assert sha(elf[start:start+size])==item['sha256'],'Embedded native asset mismatch: '+item['symbol']
+ if item['symbol']=='prosperomenu_deck':
+  path=Path(__file__).resolve().parents[1]/'engine/scripts/verify-resident-syscall.py'
+  spec=importlib.util.spec_from_file_location('resident_syscall_abi',path)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  module.verify(elf[start:start+size])
+  print('Resident syscall stack ABI OK')
 found=False
 for match in re.finditer(rb'base64:\s*"([A-Za-z0-9+/=]{2048,})"',elf):
  worker=base64.b64decode(match[1])
